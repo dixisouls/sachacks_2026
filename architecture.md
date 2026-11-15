@@ -14,8 +14,8 @@ All numbers below were measured on the OptimusKG v3.2 largest connected componen
 | 2 | Scoring core, two lists, search, CLI | `api/scoring.py`, `api/search.py`, `scripts/query.py` | Done. ~3 ms per disease |
 | 2b | Compound and sequence similarity layers | `scripts/build_similarity.py` | Done. +0.4 MB, ~35 s |
 | 3 | Rediscovery test | `scripts/rediscovery.py` | Done. Hits@10 0.197, see §5.0 |
-| 4 | Backend API | `api/main.py`, `api/models.py` | Next. Frontend is blocked on this |
-| 5 | Frontend skeleton (search, two lists, path graph) | `web/` | |
+| 4 | Backend API | `api/main.py`, `api/models.py`, `api/logging_setup.py` | Done. `uvicorn api.main:app --reload`, docs at `/docs` |
+| 5 | Frontend skeleton (search, two lists, path graph) | `web/` | Next, and unblocked |
 | 6 | Evidence + brief | `api/evidence/`, `api/brief.py` | |
 | 7 | 3D structures | `api/structures.py`, `StructureViewer.tsx` | |
 | 8 | Hosting + prewarm | `scripts/prewarm.py`, deploy config | |
