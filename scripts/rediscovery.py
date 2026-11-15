@@ -93,6 +93,20 @@ def methods_for(scorer: Scorer, seed: int) -> dict:
     }
 
 
+def tuning_grid() -> dict:
+    """Weight combinations to sweep. shared_biology is the anchor and stays at 1.0."""
+    out = {}
+    for sib in (0.25, 0.5, 1.0, 1.5):
+        for chem in (0.0, 0.2, 0.4, 0.8):
+            for hom in (0.0, 0.1, 0.2, 0.4):
+                weights = {"shared_biology": 1.0, "sibling_disease": sib,
+                           "chemical_analog": chem, "protein_homolog": hom}
+                name = f"sib{sib}_chem{chem}_hom{hom}"
+                out[name] = (weights,
+                             lambda parts, rng, w=weights: sum(w[k] * v for k, v in parts.items()))
+    return out
+
+
 def evaluate(scorer: Scorer, hidden: pl.DataFrame, methods: dict, seed: int = 0,
              verbose: bool = True) -> dict:
     """Score every method on the same held-out pairs, one matrix pass per disease."""
@@ -107,6 +121,7 @@ def evaluate(scorer: Scorer, hidden: pl.DataFrame, methods: dict, seed: int = 0,
 
     ranks: dict[str, list[int]] = {m: [] for m in methods}
     unreachable: dict[str, int] = {m: 0 for m in methods}
+    first = next(iter(methods))
     excluded = 0
     t0 = time.time()
 
@@ -116,7 +131,7 @@ def evaluate(scorer: Scorer, hidden: pl.DataFrame, methods: dict, seed: int = 0,
             score = fn(parts, rng)
             for d, r in rank_in_column(scorer, j, score, targets, eligible_base).items():
                 if r == "excluded":
-                    if name == "repurposekg":
+                    if name == first:
                         excluded += 1  # method-independent, count once
                 elif r is None:
                     unreachable[name] += 1
@@ -132,10 +147,13 @@ def evaluate(scorer: Scorer, hidden: pl.DataFrame, methods: dict, seed: int = 0,
         if scored == 0:
             out[name] = {"scored_pairs": 0}
             continue
+        h10 = float((arr <= 10).sum()) / scored
         out[name] = {
             "scored_pairs": scored,
             "unreachable": unreachable[name],
-            "hits@10": round(float((arr <= 10).sum()) / scored, 4),
+            "hits@10": round(h10, 4),
+            # 1 standard error on a proportion, so close results are not over-read
+            "hits@10_se": round(float(np.sqrt(h10 * (1 - h10) / scored)), 4),
             "hits@50": round(float((arr <= 50).sum()) / scored, 4),
             "hits@100": round(float((arr <= 100).sum()) / scored, 4),
             "mrr": round(float((1.0 / arr).sum()) / scored, 4),
@@ -147,24 +165,35 @@ def evaluate(scorer: Scorer, hidden: pl.DataFrame, methods: dict, seed: int = 0,
 
 def print_table(res: dict) -> None:
     rows = sorted(res["methods"].items(), key=lambda kv: -(kv[1].get("hits@10") or 0))
-    print(f"\n  {'method':20} {'hits@10':>8} {'hits@50':>8} {'hits@100':>9} "
+    print(f"\n  {'method':20} {'hits@10':>15} {'hits@50':>8} {'hits@100':>9} "
           f"{'MRR':>7} {'median':>7} {'unreach':>8}")
     for name, m in rows:
         if not m.get("scored_pairs"):
-            print(f"  {name:20} {'no pairs':>8}")
+            print(f"  {name:20} {'no pairs':>15}")
             continue
-        print(f"  {name:20} {m['hits@10']:>8.3f} {m['hits@50']:>8.3f} {m['hits@100']:>9.3f} "
+        h = f"{m['hits@10']:.3f} +/-{m['hits@10_se']:.3f}"
+        print(f"  {name:20} {h:>15} {m['hits@50']:>8.3f} {m['hits@100']:>9.3f} "
               f"{m['mrr']:>7.3f} {str(m['median_rank']):>7} {m['unreachable']:>8}")
-    print(f"\n  {res['methods']['repurposekg']['scored_pairs']} pairs scored over "
+    any_m = next(iter(res["methods"].values()))
+    print(f"\n  {any_m.get('scored_pairs', 0)} pairs scored over "
           f"{res['diseases']} diseases, {res['not_recoverable']} not recoverable, "
           f"{res['seconds']}s")
+
+
+def split(pos: pl.DataFrame, holdout: float, seed: int) -> tuple[pl.DataFrame, set]:
+    rng = np.random.default_rng(seed)
+    hidden = pos.filter(rng.random(pos.height) < holdout)
+    return hidden, set(zip(hidden["drug_id"].to_list(), hidden["disease_id"].to_list()))
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sample", type=int, help="evaluate only this many hidden pairs")
     ap.add_argument("--holdout", type=float, default=0.2)
-    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--seed", type=int, default=42, help="tuning split")
+    ap.add_argument("--report-seed", type=int, default=7,
+                    help="a different split, so the headline number is not the tuned one")
+    ap.add_argument("--tune", action="store_true", help="sweep the weight grid first")
     args = ap.parse_args()
 
     print("loading full scorer...")
@@ -173,23 +202,49 @@ def main() -> None:
     print(f"positive set: {pos.height} approved indications "
           f"({pos['drug_id'].n_unique()} drugs, {pos['disease_id'].n_unique()} diseases)")
 
-    rng = np.random.default_rng(args.seed)
-    mask = rng.random(pos.height) < args.holdout
-    hidden = pos.filter(mask)
-    print(f"hiding {hidden.height} pairs ({args.holdout:.0%}), "
-          f"{pos.height - hidden.height} kept for training")
+    def make_split(seed: int):
+        hidden, hide = split(pos, args.holdout, seed)
+        if args.sample and args.sample < hidden.height:
+            hidden = hidden.sample(args.sample, seed=seed)
+        return hidden, Scorer(hide=hide)
 
-    hide = set(zip(hidden["drug_id"].to_list(), hidden["disease_id"].to_list()))
-    print("rebuilding scorer without them...")
-    held = Scorer(hide=hide)
+    best = dict(DEFAULT_WEIGHTS)
+    tuning = None
+    if args.tune:
+        print(f"\nTUNING on seed {args.seed}")
+        hidden, held = make_split(args.seed)
+        print(f"  {hidden.height} held-out pairs")
+        grid = tuning_grid()
+        res = evaluate(held, hidden, {k: fn for k, (w, fn) in grid.items()}, seed=args.seed)
+        # Selected on MRR, not hits@10. MRR uses the whole ranking, so it is far less
+        # noisy than a threshold metric; on this grid the top hits@10 values sit well
+        # inside one standard error of each other and picking on them is just overfitting.
+        ranked = sorted(res["methods"].items(),
+                        key=lambda kv: (-(kv[1].get("mrr") or 0), -(kv[1].get("hits@10") or 0)))
+        print(f"  {'combination':26} {'MRR':>7} {'hits@10':>8} {'hits@50':>8}")
+        for name, m in ranked[:8]:
+            print(f"  {name:26} {m['mrr']:>7.3f} {m['hits@10']:>8.3f} {m['hits@50']:>8.3f}")
+        best = grid[ranked[0][0]][0]
+        tuning = {"split_seed": args.seed, "pairs": hidden.height, "grid_size": len(grid),
+                  "best": best, "best_on_tuning_split": ranked[0][1]}
+        print(f"  best: {best}")
 
-    eval_set = hidden
-    if args.sample and args.sample < hidden.height:
-        eval_set = hidden.sample(args.sample, seed=args.seed)
-        print(f"evaluating a sample of {eval_set.height}")
-
-    result = evaluate(held, eval_set, methods_for(held, args.seed), seed=args.seed)
+    print(f"\nREPORT on seed {args.report_seed} (a different split)")
+    hidden, held = make_split(args.report_seed)
+    print(f"  {hidden.height} held-out pairs")
+    methods = methods_for(held, args.report_seed)
+    methods["repurposekg"] = lambda parts, rng, w=best: sum(w[k] * v for k, v in parts.items())
+    result = evaluate(held, hidden, methods, seed=args.report_seed)
     print_table(result)
+
+    out = {"generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+           "holdout_fraction": args.holdout,
+           "positive_set": {"pairs": pos.height, "drugs": pos["drug_id"].n_unique(),
+                            "diseases": pos["disease_id"].n_unique()},
+           "sample": args.sample, "weights": best, "tuning": tuning,
+           "report_split_seed": args.report_seed, **result}
+    (ART / "eval.json").write_text(json.dumps(out, indent=2))
+    print(f"\nwrote {ART / 'eval.json'}")
 
 
 if __name__ == "__main__":
