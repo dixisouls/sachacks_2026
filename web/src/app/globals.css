@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+/* Flow theme: soft, organic, no boxes. */
+:root {
+  --background: #f1f4f2;
+  --surface: #ffffff;
+  --foreground: #10231e;
+  --muted: #4e615b;
+  --faint: #6f807a;
+  --soft: #e2e9e5;
+  --soft-2: #eef2f0;
+  --field: #f6f8f7;
+  --border: #dce5e0;
+  --accent: #0b7a69;
+  --accent-ink: #0a5a4e;
+  --drug: #d9573a;
+  --drug-soft: #e9967e;
+  --gene: #0b7a69;
+  --disease: #6a55d8;
+  --mint: #dcebe5;
+  --lilac: #e6e1f7;
+  --peach: #f7e3da;
+  --shadow: 16, 35, 30;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-soft: var(--soft);
+  --color-soft-2: var(--soft-2);
+  --color-field: var(--field);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-drug: var(--drug);
+  --color-gene: var(--gene);
+  --color-disease: var(--disease);
+  --color-mint: var(--mint);
+  --color-lilac: var(--lilac);
+  --color-peach: var(--peach);
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-jetbrains);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.shadow-float {
+  box-shadow: 0 1px 2px rgba(var(--shadow), 0.05), 0 40px 80px -40px rgba(var(--shadow), 0.35);
+}
+.shadow-soft {
+  box-shadow: 0 1px 2px rgba(var(--shadow), 0.06), 0 18px 40px -18px rgba(var(--shadow), 0.28);
+}
+
+@keyframes shimmer {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.skeleton {
+  background: var(--soft);
+  border-radius: 20px;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* draw-on for SVG paths: set pathLength="1" on the path */
+@keyframes draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+.draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw 1.4s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+
+@keyframes float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(0, -10px) scale(1.02); }
+}
+.float-slow { animation: float 9s ease-in-out infinite; }
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.pulse-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pulse-ring 2.4s ease-out infinite;
+}
+
+/* scroll reveal, toggled by <Reveal> */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.reveal.in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draw { animation: none; stroke-dashoffset: 0; }
+  .float-slow, .pulse-ring { animation: none; }
+  .reveal { opacity: 1; transform: none; transition: none; }
+}
+
+@keyframes fadein {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
