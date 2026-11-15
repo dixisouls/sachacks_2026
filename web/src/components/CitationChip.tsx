@@ -17,14 +17,16 @@ function kind(id: string): string {
 export default function CitationChip({ id, item, onGraph }: { id: string; item?: EvidenceItem; onGraph?: (id: string) => void }) {
   const label = kind(id);
   const isGraph = id.startsWith("KG:");
-  const cls = `inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 align-middle font-mono text-[11px] font-medium transition-colors ${
-    isGraph ? "bg-[#DCEFE8] text-[#0A5A4E] hover:bg-[#C6E5DA]" : "bg-soft-2 text-muted hover:bg-soft hover:text-foreground"
+  const cls = `inline-flex items-center gap-1 rounded-md border px-1.5 py-px align-[1px] font-mono text-[11px] font-medium transition-colors ${
+    isGraph
+      ? "border-gene/30 bg-gene-soft text-[#0b5e55] hover:border-gene"
+      : "border-line bg-surface text-muted hover:border-accent hover:text-accent-ink"
   }`;
-  const title = item ? `${item.title}${item.snippet ? ` · ${item.snippet}` : ""}` : id;
+  const title = item ? `${item.title}${item.snippet ? `. ${item.snippet}` : ""}` : id;
 
   if (isGraph && onGraph) {
     return (
-      <button type="button" className={cls} title={`${title} · highlight in the path`} onClick={() => onGraph(id)}>
+      <button type="button" className={cls} title={`${title}. Click to highlight it in the map.`} onClick={() => onGraph(id)}>
         <span className="h-1.5 w-1.5 rounded-full bg-gene" />
         {label}
       </button>
