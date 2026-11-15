@@ -135,3 +135,6 @@ $RECYCLE.BIN/
 .fuse_hidden*
 .Trash-*
 .nfs*
+
+# Local scratch scripts
+/test.py
