@@ -30,6 +30,8 @@ import numpy as np
 import polars as pl
 import scipy.sparse as sp
 
+from api.naming import display_name
+
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ARTIFACTS = ROOT / "artifacts"
 
@@ -118,8 +120,13 @@ class Scorer:
         self.disease_idx = {x: i for i, x in enumerate(self.diseases["disease_id"].to_list())}
 
         d = self.drugs
-        self.drug_name = d["name"].to_list()
+        # Names arrive shouted (CETIRIZINE) and 3,548 drugs have only a ChEMBL id.
+        # Fix both once, here, so every list and every explanation reads properly.
+        self.drug_name_raw = d["name"].to_list()
+        synonyms = d["synonyms"].to_list()
         self.drug_id = d["drug_id"].to_list()
+        self.drug_name = [display_name(n, i, s)[0]
+                          for n, i, s in zip(self.drug_name_raw, self.drug_id, synonyms)]
         self.is_approved = d["is_approved"].to_numpy()
         self.withdrawn = d["withdrawn"].to_numpy()
         self.black_box = d["black_box"].to_numpy()
@@ -340,6 +347,7 @@ class Scorer:
             "rank": rank,
             "drug_id": self.drug_id[d],
             "drug_name": self.drug_name[d],
+            "drug_name_raw": self.drug_name_raw[d],
             "score": round(100 * float(score[d]) / top),
             "score_components": comp,
             "lead_path": lead if comp[lead] > 0 else None,
