@@ -10,7 +10,13 @@ import BriefView from "./BriefView";
 import ErrorCard from "./ErrorCard";
 import PathGraph from "./PathGraph";
 import ReadinessBadge from "./ReadinessBadge";
-import StructurePlaceholder from "./StructurePlaceholder";
+import dynamic from "next/dynamic";
+
+// 3Dmol needs a real canvas and WebGL, so this never renders on the server.
+const StructurePanel = dynamic(() => import("./StructureViewer"), {
+  ssr: false,
+  loading: () => <div className="h-[340px] animate-pulse rounded-[28px] bg-field" />,
+});
 
 type Tab = "path" | "structure" | "brief";
 
@@ -153,7 +159,7 @@ export default function DetailPanel({
           ))}
 
         {tab === "structure" && (
-          <StructurePlaceholder drugId={drugId} diseaseId={diseaseId} gene={selectedGene} genes={genes} onGeneChange={setGene} />
+          <StructurePanel drugId={drugId} diseaseId={diseaseId} gene={selectedGene} genes={genes} onGeneChange={setGene} />
         )}
 
         {tab === "brief" && (

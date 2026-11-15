@@ -1,14 +1,15 @@
-// Mount (for DetailPanel): const StructureViewer = lazy(() => import("./StructureViewer"));
-//   <Suspense fallback={null}><StructureViewer drugId={drugId} geneId={selectedGeneId} /></Suspense>
-// Needs a QueryClientProvider above it, VITE_API_URL set, and: npm i --save-exact 3dmol@2.5.5 smiles-drawer@2.4.1
-//
+"use client";
+
 // 3D structure for one (drug, gene) pair, architecture.md §9.3–9.4.
 // Data: GET /api/structures?drug_id=&gene_id= → StructurePlan (api/structures.py).
-// 3dmol and smiles-drawer are dynamically imported, so neither lands in the main bundle.
+// Mounted by DetailPanel through next/dynamic with ssr:false, because 3Dmol needs
+// a real canvas and WebGL. 3dmol and smiles-drawer are imported dynamically, so
+// neither lands in the main bundle.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { GLViewer } from "3dmol";
+import type { PathNode } from "@/lib/types";
 
 // ── types (mirror api/structures.py) ─────────────────────────────────────────
 
@@ -39,7 +40,7 @@ export interface StructurePlan {
   caption: string;
 }
 
-const API = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+const API = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 
 async function fetchPlan(drugId: string, geneId: string): Promise<StructurePlan> {
   const q = new URLSearchParams({ drug_id: drugId, gene_id: geneId });
@@ -184,9 +185,11 @@ function Smiles2D({ smiles, className }: { smiles: string; className?: string })
         () => !cancelled && setFailed(true),
       );
     });
+    // capture the node now: by cleanup time the ref may already point elsewhere
+    const node = svg.current;
     return () => {
       cancelled = true;
-      svg.current?.replaceChildren();
+      node?.replaceChildren();
     };
   }, [smiles]);
 
@@ -275,7 +278,7 @@ export interface StructureViewerProps {
   geneId: string;
 }
 
-export default function StructureViewer({ drugId, geneId }: StructureViewerProps) {
+function StructureBody({ drugId, geneId }: StructureViewerProps) {
   const { data: plan, isPending, isError, refetch } = useQuery({
     queryKey: ["structure", drugId, geneId],
     queryFn: () => fetchPlan(drugId, geneId),
@@ -391,7 +394,8 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
         {plan.caption}
         {mode === "BOUND" && plan.ligand_match === "stereo_relaxed" && (
           <span className="block text-gray-500">
-            PDB ligand {plan.ligand_comp_id} matches {drug.name}'s structure; stereochemistry not compared.
+            PDB ligand {plan.ligand_comp_id} matches the structure of {drug.name}; stereochemistry
+            not compared.
           </span>
         )}
         {mode === "SEPARATE" && (
@@ -401,5 +405,52 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
         )}
       </figcaption>
     </figure>
+  );
+}
+
+// ── mount point: gene picker + viewer ────────────────────────────────────────
+// Same props as the StructurePlaceholder this replaces, so DetailPanel's call
+// site is unchanged. The picker stays useful: a drug can sit on several paths,
+// and each gene has a different protein to look at.
+
+export type StructurePanelProps = {
+  drugId: string;
+  diseaseId: string;
+  gene: PathNode | null;
+  genes: PathNode[];
+  onGeneChange: (geneId: string) => void;
+};
+
+export default function StructurePanel({ drugId, gene, genes, onGeneChange }: StructurePanelProps) {
+  return (
+    <div className="space-y-5">
+      {genes.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="mr-1 text-muted">Protein on the path</span>
+          {genes.map((g) => (
+            <button
+              key={g.id}
+              onClick={() => onGeneChange(g.id)}
+              aria-pressed={g.id === gene?.id}
+              className={`min-h-11 rounded-full px-4 font-mono text-[13px] transition-colors ${
+                g.id === gene?.id ? "bg-gene text-white" : "bg-soft-2 hover:bg-soft"
+              }`}
+            >
+              {g.label ?? g.id}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {gene ? (
+        <StructureBody drugId={drugId} geneId={gene.id} />
+      ) : (
+        <div className="grid h-[300px] place-items-center rounded-[28px] bg-field p-6 text-center">
+          <p className="text-sm text-muted">
+            No gene on this path, so there is no protein to show.
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
