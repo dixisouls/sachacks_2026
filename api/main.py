@@ -34,6 +34,7 @@ from api.models import (CandidatesResponse, DiseaseHit, DiseaseSummary, Health,
 from api.scoring import Scorer
 from api.search import DiseaseSearch
 from api.compare import router as compare_router
+from api.design import router as design_router
 from api.profile import router as profile_router
 from api.structures import router as structures_router
 
@@ -91,6 +92,8 @@ app = FastAPI(
 app.include_router(structures_router)
 # side-by-side structure comparison for the chemical look-alike path (api/compare.py)
 app.include_router(compare_router)
+# designs a new molecule from a ranked drug, checked with RDKit (api/design.py)
+app.include_router(design_router)
 # structured drug facts and cohort comparison, assembled as model input (api/profile.py)
 app.include_router(profile_router)
 
