@@ -8,6 +8,7 @@ import { drugLabel, PATH_LABEL, softenNames } from "@/lib/format";
 import type { Candidate, DiseaseSummary, PathNode, PathType } from "@/lib/types";
 import BriefView from "./BriefView";
 import ErrorCard from "./ErrorCard";
+import LookAlikeCompare, { type Analog } from "./LookAlikeCompare";
 import PathGraph from "./PathGraph";
 import ReadinessBadge from "./ReadinessBadge";
 import StructurePlaceholder from "./StructurePlaceholder";
@@ -44,6 +45,18 @@ export default function DetailPanel({
     return first ?? genes[0]?.id ?? null;
   }, [paths.data, genes]);
   const selectedGene: PathNode | null = genes.find((g) => g.id === (gene ?? defaultGene)) ?? null;
+  // look-alike drugs from the chemical-analog paths: drug -> analog -> gene -> disease
+  const analogs = useMemo<Analog[]>(() => {
+    const out: Analog[] = [];
+    for (const p of paths.data?.paths ?? []) {
+      const id = p.type === "chemical_analog" ? p.nodes[1] : undefined;
+      if (!id || out.some((a) => a.id === id)) continue;
+      const node = paths.data?.nodes.find((n) => n.id === id);
+      out.push({ id, label: node?.label ?? null, similarity: p.similarity ?? null });
+    }
+    // closest look-alike first
+    return out.sort((x, y) => (y.similarity ?? 0) - (x.similarity ?? 0));
+  }, [paths.data]);
   const name = drugLabel(candidate.drug_name, drugId);
 
   const tabs: { key: Tab; label: string; busy?: boolean }[] = [
@@ -149,6 +162,7 @@ export default function DetailPanel({
                   {paths.data.paths.length === 0 && <li className="text-[15px] text-muted">No paths returned.</li>}
                 </ul>
               </div>
+              {analogs.length > 0 && <LookAlikeCompare key={drugId} drugId={drugId} drugName={name} analogs={analogs} />}
             </div>
           ))}
 

@@ -5,6 +5,7 @@
 import * as mock from "./mock";
 import type {
   Brief,
+  Comparison,
   CandidatesResponse,
   DiseaseHit,
   DiseaseSummary,
@@ -88,6 +89,14 @@ export async function getBrief(drugId: string, diseaseId: string): Promise<Brief
     const cand = [...cands.approved, ...cands.investigational].find((c) => c.drug_id === drugId);
     return mock.sampleBrief(drugId, diseaseId, paths, cand);
   }
+}
+
+/** Side-by-side structure comparison for a chemical look-alike pair. Needs the live backend (rdkit). */
+export function getComparison(drugId: string, otherDrugId: string): Promise<Comparison> {
+  if (USE_MOCKS) {
+    return Promise.reject(new ApiError(0, "The structure comparison needs the live backend. Set NEXT_PUBLIC_API_URL."));
+  }
+  return request(`/api/compare?${qs({ drug_id: drugId, other_drug_id: otherDrugId })}`);
 }
 
 export function getEval(): Promise<EvalResult> {
