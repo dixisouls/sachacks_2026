@@ -9,3 +9,4 @@ httpx>=0.27
 rdkit>=2024.3     # api/compare.py draws the molecules at request time
 
 # To REBUILD the artifacts from the raw graph, also install requirements-build.txt
+google-genai>=1.0  # api/brief.py

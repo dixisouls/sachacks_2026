@@ -425,19 +425,26 @@ class Scorer:
                           "inferred": True})
             og = self.top_genes(other, j, 1, mcol)
             chain = [drug_id, oid]
+            # The fingerprint ignores three-dimensional handedness, so a score of 1.00
+            # means identical connectivity, not an identical molecule: baclofen and
+            # arbaclofen are mirror images and both score 1.00. Saying "100% similar"
+            # overstates it, and this sentence is fed to the model that writes the brief.
+            if tanimoto >= 0.999:
+                likeness = (f"has the same structure as {self.drug_name[other]} "
+                            f"apart from stereochemistry")
+            else:
+                likeness = f"is {tanimoto:.0%} structurally similar to {self.drug_name[other]}"
             if og:
                 g = og[0][0]
                 gid = add_gene(g)
                 target_edge(oid, gid)
                 gene_disease_edge(gid, g)
                 chain += [gid, disease_id]
-                why = (f"{self.drug_name[d]} is {tanimoto:.0%} structurally similar to "
-                       f"{self.drug_name[other]}, which targets {self.gene_symbol[g]}, "
-                       f"a gene associated with {self.disease_name[j]}")
+                why = (f"{self.drug_name[d]} {likeness}, which targets "
+                       f"{self.gene_symbol[g]}, a gene associated with {self.disease_name[j]}")
             else:
                 chain += [disease_id]
-                why = (f"{self.drug_name[d]} is {tanimoto:.0%} structurally similar to "
-                       f"{self.drug_name[other]}")
+                why = f"{self.drug_name[d]} {likeness}"
             paths.append({"type": "chemical_analog", "nodes": chain,
                           "contribution": round(contrib, 5), "inferred": True,
                           "similarity": round(tanimoto, 3), "explanation": why})

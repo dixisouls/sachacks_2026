@@ -26,6 +26,8 @@ from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
+from api import config
+from api.brief import Brief, generate as generate_brief
 from api.logging_setup import new_request_id, request_id, setup_logging, timed
 from api.models import (CandidatesResponse, DiseaseHit, DiseaseSummary, Health,
                         PathsResponse)
@@ -68,6 +70,11 @@ async def lifespan(app: FastAPI):
     if state["eval"] is None:
         log.warning("artifacts/eval.json missing; /api/eval will return 404. "
                     "Run: python scripts/rediscovery.py --tune")
+    if config.have_llm():
+        log.info("brief enabled, model %s", config.GEMINI_MODEL)
+    else:
+        log.warning("no GEMINI_API_KEY; /api/brief will return 503. "
+                    "Put it in .env at the repo root (see .env.example)")
     yield
     log.info("shutting down")
 
@@ -230,6 +237,29 @@ def paths(
         step["inferred"] = sum(1 for p in result["paths"] if p["inferred"])
         step["types"] = ",".join(sorted({p["type"] for p in result["paths"]})) or "none"
     return PathsResponse(**result)
+
+
+@app.post("/api/brief", response_model=Brief, tags=["brief"])
+async def brief(
+    drug_id: str = Query(description="e.g. CHEMBL701"),
+    disease_id: str = Query(description="e.g. MONDO_0010726"),
+    refresh: bool = Query(False, description="regenerate instead of serving the cached brief"),
+) -> Brief:
+    """A cited hypothesis brief. Every claim names a source we supplied; the rest are dropped."""
+    resolve_disease(disease_id)
+    s = scorer()
+    if drug_id not in s.drug_idx:
+        raise HTTPException(404, f"No drug with id {drug_id!r}")
+    with timed(log, "brief", level=logging.INFO, drug=drug_id, disease=disease_id) as step:
+        try:
+            result = await generate_brief(s, drug_id, disease_id, refresh=refresh)
+        except RuntimeError as exc:
+            raise HTTPException(503, str(exc))
+        step["claims"] = len(result.mechanism) + len(result.evidence_for) + len(result.evidence_against)
+        step["dropped"] = result.dropped_claims
+        step["evidence"] = len(result.evidence)
+        step["model"] = result.model
+    return result
 
 
 @app.get("/api/eval", tags=["meta"])
