@@ -17,16 +17,16 @@ export default function CandidateLists({ data, selected }: { data: CandidatesRes
   ];
 
   return (
-    <div className="panel overflow-hidden">
-      <div className="border-b border-line p-3">
-        <div role="tablist" aria-label="Which drugs" className="grid grid-cols-2 gap-1 rounded-[14px] bg-sunken p-1 text-[14px] font-semibold">
+    <div>
+      <div className="pb-3">
+        <div role="tablist" aria-label="Which drugs" className="grid grid-cols-2 gap-1 rounded-full bg-soft p-1 text-[14px] font-semibold">
           {tabs.map((t) => (
             <button
               key={t.key}
               role="tab"
               aria-selected={tab === t.key}
               onClick={() => setTab(t.key)}
-              className={`flex h-10 items-center justify-center gap-2 rounded-[11px] transition-colors ${
+              className={`flex h-10 items-center justify-center gap-2 rounded-full transition-colors ${
                 tab === t.key ? "bg-surface text-foreground shadow-soft" : "text-muted hover:text-foreground"
               }`}
             >
@@ -35,7 +35,7 @@ export default function CandidateLists({ data, selected }: { data: CandidatesRes
             </button>
           ))}
         </div>
-        <p className="px-1 pt-3 text-[13px] leading-snug text-muted">
+        <p className="px-3 pt-3 text-[13px] leading-snug text-muted">
           {tab === "approved"
             ? "Already on the market, so they have safety data. These are the repurposing candidates."
             : "Experimental or withdrawn compounds. Useful for researchers, further from patients."}

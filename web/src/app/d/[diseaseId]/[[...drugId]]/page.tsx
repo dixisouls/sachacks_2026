@@ -47,7 +47,7 @@ export default function Results() {
               <h1 className="mt-2 max-w-[900px] text-[clamp(36px,5.4vw,64px)] font-extrabold leading-[1] tracking-[-0.045em]">
                 {data.disease.name}
               </h1>
-              <div className="mt-7 grid w-full max-w-[640px] grid-cols-3 divide-x divide-line rounded-2xl border border-line bg-surface">
+              <div className="mt-7 grid w-full max-w-[640px] grid-cols-3 rounded-[28px] bg-surface shadow-soft">
                 <Fact n={data.disease.n_genes} label={data.disease.n_genes === 1 ? "gene linked to it" : "genes linked to it"} />
                 <Fact n={data.approved.length} label="approved drugs ranked" />
                 <Fact
@@ -87,7 +87,7 @@ export default function Results() {
               ))}
             </ul>
 
-            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+            <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
               <section aria-label="Ranked drugs" className={`min-w-0 ${drugId ? "max-lg:hidden" : ""}`}>
                 <CandidateLists key={diseaseId} data={data} selected={drugId} />
               </section>
@@ -132,7 +132,7 @@ function shortHint(k: Readiness) {
 
 function Fact({ n, label, title }: { n: number; label: string; title?: string }) {
   return (
-    <div className="flex flex-col items-center px-2 py-3.5 sm:px-4" title={title}>
+    <div className="flex flex-col items-center px-2 py-4 sm:px-4" title={title}>
       <div className="text-[26px] font-bold leading-none tabular-nums tracking-[-0.03em] sm:text-[30px]">{n.toLocaleString()}</div>
       <p className="mt-1.5 text-[12px] leading-tight text-muted sm:text-[13px]">{label}</p>
     </div>
@@ -141,10 +141,10 @@ function Fact({ n, label, title }: { n: number; label: string; title?: string })
 
 function EmptyDetail({ first }: { first: string | null }) {
   return (
-    <div className="grid min-h-[480px] place-items-center rounded-[24px] border-2 border-dashed border-line-strong p-10 text-center">
+    <div className="grid min-h-[480px] place-items-center rounded-[36px] border-2 border-dashed border-soft p-10 text-center">
       <div className="max-w-[340px]">
         <svg aria-hidden="true" viewBox="0 0 200 40" className="mx-auto w-[180px]">
-          <path d="M20 20 H 180" stroke="var(--line-strong)" strokeWidth="2" strokeDasharray="5 6" />
+          <path d="M20 20 H 180" stroke="var(--soft)" strokeWidth="2" strokeDasharray="5 6" />
           <circle cx="20" cy="20" r="10" fill="var(--drug)" />
           <circle cx="100" cy="20" r="7" fill="var(--gene)" />
           <circle cx="180" cy="20" r="10" fill="var(--disease)" />

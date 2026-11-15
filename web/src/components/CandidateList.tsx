@@ -29,18 +29,13 @@ export default function CandidateList({
   const selIndex = items.findIndex((c) => c.drug_id === selected);
   const [phoneShown, setPhoneShown] = useState(() => pagesFor(selIndex, PHONE_STEP));
   const [deskShown, setDeskShown] = useState(() => pagesFor(selIndex, DESKTOP_STEP));
-  if (!items.length) return <p className="px-5 py-10 text-center text-[15px] text-muted">{empty}</p>;
+  if (!items.length) return <p className="px-3 py-10 text-center text-[15px] text-muted">{empty}</p>;
   // each breakpoint hides its own overflow; max-sm = phones, sm = laptops and up
   const rowClass = (i: number) =>
     [i >= phoneShown && "max-sm:hidden", i >= deskShown && "sm:hidden"].filter(Boolean).join(" ") || undefined;
   return (
     <>
-      <div className="flex items-center gap-3 border-b border-line bg-field px-5 py-2 text-[12px] font-semibold text-faint">
-        <span className="w-6 text-right">#</span>
-        <span className="flex-1">Drug and the genes it reaches</span>
-        <span className="w-11 text-center">Score</span>
-      </div>
-      <ol className="divide-y divide-line">
+      <ol className="flex flex-col gap-1">
         {items.map((c, i) => {
           const isSel = c.drug_id === selected;
           return (
@@ -49,11 +44,10 @@ export default function CandidateList({
                 href={`/d/${encodeURIComponent(diseaseId)}/${encodeURIComponent(c.drug_id)}`}
                 scroll={false}
                 aria-current={isSel ? "true" : undefined}
-                className={`relative flex items-center gap-3 px-5 py-3.5 transition-colors ${
-                  isSel ? "bg-accent-soft/60" : "hover:bg-field"
+                className={`flex items-center gap-3 rounded-3xl py-3 pl-2 pr-3 transition-all sm:pr-4 ${
+                  isSel ? "bg-surface shadow-soft" : "hover:bg-surface/60"
                 }`}
               >
-                {isSel && <span aria-hidden="true" className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-accent" />}
                 <span className={`w-6 shrink-0 text-right text-[15px] font-semibold tabular-nums ${isSel ? "text-accent-ink" : "text-faint"}`}>{c.rank}</span>
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="flex min-w-0 items-center gap-2">
@@ -98,15 +92,13 @@ export default function CandidateList({
 function ShowMore({ remaining, step, onClick, className }: { remaining: number; step: number; onClick: () => void; className: string }) {
   if (remaining <= 0) return null;
   return (
-    <div className={`border-t border-line p-3 ${className}`}>
-      <button
-        type="button"
-        onClick={onClick}
-        className="flex h-11 w-full items-center justify-center gap-2 rounded-[12px] text-[14px] font-semibold text-accent-ink transition-colors hover:bg-accent-soft"
-      >
-        Show {Math.min(step, remaining)} more
-        <span className="font-normal text-muted">of {remaining} left</span>
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-surface text-[14px] font-semibold shadow-soft transition-colors hover:bg-soft-2 ${className}`}
+    >
+      Show {Math.min(step, remaining)} more
+      <span className="font-normal text-muted">of {remaining} left</span>
+    </button>
   );
 }
