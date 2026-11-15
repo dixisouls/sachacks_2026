@@ -1,0 +1,137 @@
+# =============================================================================
+# Project data (never commit raw data or runtime caches)
+# NOTE: artifacts/ (built parquet/npz shipped with the backend) stays TRACKED.
+# Do not add global *.parquet / *.npz rules.
+# =============================================================================
+/data/
+/cache/
+
+# Event handout (not project source)
+/HackRx Kickoff (Fall 2026).pdf
+
+# =============================================================================
+# Secrets / environment
+# =============================================================================
+.env
+.env.*
+!.env.example
+
+# =============================================================================
+# Python
+# =============================================================================
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Packaging (root-level build/dist only; web/dist handled below)
+*.egg-info/
+*.egg
+/build/
+/dist/
+
+# =============================================================================
+# Frontend (web/ — React + TypeScript + Vite)
+# =============================================================================
+node_modules/
+web/dist/
+web/dist-ssr/
+.vite/
+*.tsbuildinfo
+.vercel/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# =============================================================================
+# Logs
+# =============================================================================
+*.log
+logs/
+
+# =============================================================================
+# Editors / IDEs
+# =============================================================================
+# VS Code (keep shared extension recommendations and settings)
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# JetBrains
+.idea/
+
+# Vim
+*.swp
+*.swo
+*.swn
+[._]*.s[a-v][a-z]
+Session.vim
+.netrwhist
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# =============================================================================
+# Claude Code (local, per-user)
+# =============================================================================
+.claude/settings.local.json
+
+# =============================================================================
+# macOS
+# =============================================================================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+# Custom folder icons (literal "Icon" + CR)
+Icon
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# =============================================================================
+# Windows
+# =============================================================================
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+*.stackdump
+
+# =============================================================================
+# Linux
+# =============================================================================
+*~
+.directory
+.fuse_hidden*
+.Trash-*
+.nfs*
