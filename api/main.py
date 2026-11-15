@@ -31,6 +31,7 @@ from api.models import (CandidatesResponse, DiseaseHit, DiseaseSummary, Health,
                         PathsResponse)
 from api.scoring import Scorer
 from api.search import DiseaseSearch
+from api.structures import router as structures_router
 
 setup_logging()
 log = logging.getLogger("repurposekg")
@@ -76,6 +77,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# 3D structure lookup and the file proxy (api/structures.py)
+app.include_router(structures_router)
 
 origins = os.environ.get("CORS_ORIGINS")
 app.add_middleware(
