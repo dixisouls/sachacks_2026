@@ -8,9 +8,10 @@ import { drugLabel, PATH_LABEL, softenNames } from "@/lib/format";
 import type { Candidate, DiseaseSummary, PathNode, PathType } from "@/lib/types";
 import BriefView from "./BriefView";
 import ErrorCard from "./ErrorCard";
+import LookAlikeCompare, { type Analog } from "./LookAlikeCompare";
 import PathGraph from "./PathGraph";
 import ReadinessBadge from "./ReadinessBadge";
-import StructurePlaceholder from "./StructurePlaceholder";
+import StructurePanel from "./StructurePanel";
 
 type Tab = "path" | "structure" | "brief";
 
@@ -44,6 +45,18 @@ export default function DetailPanel({
     return first ?? genes[0]?.id ?? null;
   }, [paths.data, genes]);
   const selectedGene: PathNode | null = genes.find((g) => g.id === (gene ?? defaultGene)) ?? null;
+  // look-alike drugs from the chemical-analog paths: drug -> analog -> gene -> disease
+  const analogs = useMemo<Analog[]>(() => {
+    const out: Analog[] = [];
+    for (const p of paths.data?.paths ?? []) {
+      const id = p.type === "chemical_analog" ? p.nodes[1] : undefined;
+      if (!id || out.some((a) => a.id === id)) continue;
+      const node = paths.data?.nodes.find((n) => n.id === id);
+      out.push({ id, label: node?.label ?? null, similarity: p.similarity ?? null });
+    }
+    // closest look-alike first
+    return out.sort((x, y) => (y.similarity ?? 0) - (x.similarity ?? 0));
+  }, [paths.data]);
   const name = drugLabel(candidate.drug_name, drugId);
 
   const tabs: { key: Tab; label: string; busy?: boolean }[] = [
@@ -53,23 +66,23 @@ export default function DetailPanel({
   ];
 
   return (
-    <div className="rounded-[36px] bg-surface p-6 shadow-float sm:p-10 [animation:fadein_.35s_ease]">
-      <div className="flex flex-wrap items-start gap-4">
-        <div className="min-w-[220px] flex-1">
-          <h2 className="text-[clamp(30px,3.5vw,42px)] font-extrabold leading-[1.05] tracking-[-0.035em]">{name}</h2>
+    <div className="relative rounded-[28px] bg-surface p-5 shadow-float sm:rounded-[36px] sm:p-10 [animation:fadein_.35s_ease]">
+      <div className="flex items-start gap-4 pr-10">
+        <div className="min-w-0 flex-1">
+          <h2 className="break-words text-[clamp(28px,3.5vw,42px)] font-extrabold leading-[1.05] tracking-[-0.035em]">{name}</h2>
           <p className="mt-2 text-[15px] text-muted">
             for {disease.name} · <span className="font-mono text-[13px]">{drugId}</span>
           </p>
         </div>
         <div className="text-right">
-          <div className="text-[44px] font-extrabold leading-none tracking-[-0.04em]">{candidate.score}</div>
+          <div className="text-[34px] font-extrabold leading-none tracking-[-0.04em] sm:text-[44px]">{candidate.score}</div>
           <div className="mt-1 text-xs text-muted">relative score</div>
         </div>
         <Link
           href={`/d/${encodeURIComponent(diseaseId)}`}
           scroll={false}
           aria-label="Close"
-          className="-mr-2 -mt-2 grid h-11 w-11 place-items-center rounded-full text-muted hover:bg-soft-2 hover:text-foreground"
+          className="absolute right-3 top-3 grid h-11 w-11 place-items-center rounded-full text-muted hover:bg-soft-2 hover:text-foreground sm:right-5 sm:top-5"
         >
           <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24">
             <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -91,14 +104,14 @@ export default function DetailPanel({
 
       <ScoreBreakdown c={candidate} weights={weights} />
 
-      <div role="tablist" aria-label="Detail" className="mt-7 inline-flex gap-1 rounded-full bg-soft-2 p-1.5 text-sm font-bold">
+      <div role="tablist" aria-label="Detail" className="mt-7 flex w-full gap-1 rounded-full bg-soft-2 p-1.5 text-sm font-bold sm:inline-flex sm:w-auto">
         {tabs.map((t) => (
           <button
             key={t.key}
             role="tab"
             aria-selected={tab === t.key}
             onClick={() => setTab(t.key)}
-            className={`flex min-h-11 items-center gap-2 rounded-full px-5 transition-all ${
+            className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full px-4 transition-all sm:flex-none sm:px-5 ${
               tab === t.key ? "bg-foreground text-background" : "text-muted hover:text-foreground"
             }`}
           >
@@ -149,11 +162,12 @@ export default function DetailPanel({
                   {paths.data.paths.length === 0 && <li className="text-[15px] text-muted">No paths returned.</li>}
                 </ul>
               </div>
+              {analogs.length > 0 && <LookAlikeCompare key={drugId} drugId={drugId} drugName={name} analogs={analogs} />}
             </div>
           ))}
 
         {tab === "structure" && (
-          <StructurePlaceholder drugId={drugId} diseaseId={diseaseId} gene={selectedGene} genes={genes} onGeneChange={setGene} />
+          <StructurePanel drugId={drugId} diseaseId={diseaseId} gene={selectedGene} genes={genes} onGeneChange={setGene} />
         )}
 
         {tab === "brief" && (

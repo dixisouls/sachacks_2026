@@ -37,6 +37,7 @@ export default function CandidateLists({ data, selected }: { data: CandidatesRes
         {tab === "approved" ? "Approved drugs: the repurposing candidates." : "Investigational or withdrawn compounds, for researchers."}
       </p>
       <CandidateList
+        key={tab}
         items={tab === "approved" ? data.approved : data.investigational}
         diseaseId={id}
         selected={selected}

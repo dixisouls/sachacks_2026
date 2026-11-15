@@ -160,3 +160,24 @@ export interface EvalResult {
   not_recoverable?: number;
   diseases?: number;
 }
+
+/** GET /api/compare (api/compare.py): the chemical look-alike path, drawn. */
+export interface MoleculeImage {
+  drug_id: string;
+  name: string;
+  smiles: string;
+  svg: string; // inline SVG, shared scaffold greyed, unique atoms coloured
+  n_atoms: number;
+  n_shared_atoms: number;
+}
+
+export interface Comparison {
+  tanimoto: number; // flat 2D similarity, what scoring used
+  tanimoto_stereo: number; // same comparison including handedness
+  stereo_only_difference: boolean;
+  shared_atoms: number;
+  shared_smarts: string;
+  left: MoleculeImage;
+  right: MoleculeImage;
+  caption: string;
+}

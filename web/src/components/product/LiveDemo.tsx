@@ -16,7 +16,7 @@ export default function LiveDemo() {
   const top = q.data?.approved.slice(0, 5) ?? [];
 
   return (
-    <div className="rounded-[36px] bg-surface p-6 shadow-float sm:p-10">
+    <div className="rounded-[28px] bg-surface p-4 shadow-float sm:rounded-[36px] sm:p-10">
       <div role="group" aria-label="Example diseases" className="flex flex-wrap gap-2">
         {DEMO_DISEASES.map((d) => (
           <button
@@ -47,13 +47,18 @@ export default function LiveDemo() {
               href={`/d/${id}/${encodeURIComponent(c.drug_id)}`}
               className="flex min-h-11 items-center gap-4 rounded-3xl px-3 py-2.5 transition-colors hover:bg-field"
             >
-              <span className="w-6 text-right text-xl font-light text-faint">{c.rank}</span>
+              <span className="w-5 shrink-0 text-right text-xl font-light text-faint sm:w-6">{c.rank}</span>
               <ScoreRing score={c.score} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[17px] font-bold">{drugLabel(c.drug_name, c.drug_id)}</span>
                 <span className="block truncate font-mono text-xs text-muted">{c.top_gene_symbols.join(" · ") || "—"}</span>
+                <span className="mt-0.5 block sm:hidden">
+                  <ReadinessDot value={c.readiness} />
+                </span>
               </span>
-              <ReadinessDot value={c.readiness} />
+              <span className="hidden sm:inline-flex">
+                <ReadinessDot value={c.readiness} />
+              </span>
             </Link>
           </li>
         ))}
