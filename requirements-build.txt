@@ -5,7 +5,7 @@
 
 optimuskg>=1.0        # scripts/build_artifacts.py, downloads the graph on first run
 requests>=2.31
-rdkit>=2024.3         # scripts/build_similarity.py, chemical similarity
+# rdkit is in requirements.txt: needed at runtime too, by api/compare.py
 
 # The protein sequence layer also needs the `mmseqs` binary:
 #   macOS/Linux:  brew install mmseqs2    or    conda install -c bioconda mmseqs2
