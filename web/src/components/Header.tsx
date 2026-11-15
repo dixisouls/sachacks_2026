@@ -14,20 +14,20 @@ export default function Header() {
     ["/validation", "Does it work?", path === "/validation"],
   ];
   return (
-    <header className="sticky top-0 z-30 border-b border-line/70 bg-background/85 backdrop-blur-md">
+    <header className="sticky top-0 z-30 bg-background/85 backdrop-blur-md">
       <div className="mx-auto grid h-16 max-w-[1280px] grid-cols-[1fr_auto] items-center gap-4 px-4 sm:px-8 md:grid-cols-[1fr_auto_1fr]">
         <Link href="/" className="flex items-center gap-2.5 justify-self-start text-[17px] font-extrabold tracking-[-0.02em]">
           <Logo />
           RepurposeKG
         </Link>
-        <nav aria-label="Main" className="flex items-center gap-1 rounded-full border border-line bg-surface p-1 max-md:hidden">
+        <nav aria-label="Main" className="flex items-center gap-1 rounded-full bg-surface p-1 shadow-soft max-md:hidden">
           {items.map(([href, label, active]) => (
             <Link
               key={href}
               href={href}
               aria-current={active ? "page" : undefined}
               className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                active ? "bg-foreground text-surface" : "text-muted hover:bg-sunken hover:text-foreground"
+                active ? "bg-foreground text-surface" : "text-muted hover:bg-soft-2 hover:text-foreground"
               }`}
             >
               {label}

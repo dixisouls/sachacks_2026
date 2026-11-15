@@ -265,13 +265,13 @@ export default function PathGraph({ data, drugId, diseaseId, highlight, selected
   return (
     <div>
       <div
-        className="relative overflow-hidden rounded-2xl border border-line bg-field"
-        style={{ backgroundImage: "radial-gradient(var(--line) 1px, transparent 1px)", backgroundSize: "18px 18px" }}
+        className="relative overflow-hidden rounded-3xl bg-soft-2"
+        style={{ backgroundImage: "radial-gradient(var(--soft) 1px, transparent 1px)", backgroundSize: "18px 18px" }}
       >
         <div ref={ref} className="w-full" style={{ height }} />
         <button
           onClick={() => cyRef.current?.fit(undefined, 40)}
-          className="absolute right-3 top-3 h-8 rounded-full border border-line bg-surface px-3 text-xs font-semibold text-muted hover:text-foreground"
+          className="absolute right-3 top-3 h-8 rounded-full bg-surface px-3 text-xs shadow-soft font-semibold text-muted hover:text-foreground"
         >
           Re-center
         </button>

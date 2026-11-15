@@ -33,8 +33,8 @@ export default function StructurePanel({ drugId, gene, genes, onGeneChange }: Pr
                 key={g.id}
                 onClick={() => onGeneChange(g.id)}
                 aria-pressed={g.id === gene?.id}
-                className={`flex h-10 items-center gap-2 rounded-full border px-3.5 font-mono text-[13px] font-medium transition-colors ${
-                  g.id === gene?.id ? "border-gene bg-gene text-white" : "border-line bg-surface hover:border-gene"
+                className={`flex h-10 items-center gap-2 rounded-full px-3.5 font-mono text-[13px] font-medium transition-colors ${
+                  g.id === gene?.id ? "bg-gene text-white" : "bg-soft-2 hover:bg-mint"
                 }`}
               >
                 <span className={`h-2 w-2 rounded-full ${g.id === gene?.id ? "bg-white" : "bg-gene"}`} />
@@ -47,7 +47,7 @@ export default function StructurePanel({ drugId, gene, genes, onGeneChange }: Pr
       {gene && !USE_MOCKS ? (
         <StructureViewer key={`${drugId}|${gene.id}`} drugId={drugId} geneId={gene.id} />
       ) : (
-        <div className="grid h-[300px] place-items-center rounded-2xl border border-line bg-field p-6 text-center">
+        <div className="grid h-[300px] place-items-center rounded-3xl bg-soft-2 p-6 text-center">
           <div>
             <svg aria-hidden="true" viewBox="0 0 60 60" className="mx-auto w-14">
               <circle cx="30" cy="30" r="22" fill="none" stroke="var(--gene)" strokeWidth="3" strokeDasharray="6 5" />

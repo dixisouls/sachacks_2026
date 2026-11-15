@@ -98,7 +98,7 @@ function MolCanvas({ files, setup, surface, resetSignal, className }: MolCanvasP
           Promise.all(files.map((f) => fetchText(f.url))),
         ]);
         if (cancelled || !host.current) return;
-        const viewer = $3Dmol.createViewer(host.current, { backgroundColor: "white" });
+        const viewer = $3Dmol.createViewer(host.current, { backgroundColor: "#f6f8f7" });
         texts.forEach((t, i) => viewer.addModel(t, files[i].format));
         viewerRef.current = viewer;
         libRef.current = $3Dmol;
@@ -155,7 +155,7 @@ function MolCanvas({ files, setup, surface, resetSignal, className }: MolCanvasP
   }, []);
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl border border-line bg-surface ${className ?? ""}`}>
+    <div className={`relative overflow-hidden rounded-3xl bg-field ${className ?? ""}`}>
       <div ref={host} className="absolute inset-0" />
       {status !== "ready" && (
         <div className="absolute inset-0 flex items-center justify-center text-sm text-muted">
@@ -228,8 +228,8 @@ function useIsNarrow(query = "(max-width: 639px)") {
 }
 
 const btn =
-  "h-9 rounded-full border border-line bg-surface px-3.5 text-[13px] font-semibold text-foreground hover:border-foreground " +
-  "aria-pressed:border-foreground aria-pressed:bg-foreground aria-pressed:text-surface";
+  "h-9 rounded-full bg-soft-2 px-3.5 text-[13px] font-semibold text-foreground hover:bg-soft " +
+  "aria-pressed:bg-foreground aria-pressed:text-surface";
 
 // ── style setups per mode (§9.3) ─────────────────────────────────────────────
 
@@ -333,7 +333,7 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
   }
   if (isError || !plan) {
     return (
-      <div className="rounded-2xl border border-line p-4 text-sm text-muted">
+      <div className="rounded-3xl bg-soft-2 p-4 text-sm text-muted">
         Structure lookup failed.{" "}
         <button className="underline" onClick={() => refetch()}>Retry</button>
       </div>
@@ -366,11 +366,11 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
       className="h-80"
     />
   ) : drug.smiles ? (
-    <div className="flex h-80 items-center justify-center rounded-2xl border border-line bg-surface">
+    <div className="flex h-80 items-center justify-center rounded-3xl bg-field">
       <Smiles2D smiles={drug.smiles} className="h-60 w-80 max-w-full" />
     </div>
   ) : (
-    <div className="flex h-80 items-center justify-center rounded-2xl border border-line text-sm text-muted">
+    <div className="flex h-80 items-center justify-center rounded-3xl bg-soft-2 text-sm text-muted">
       No small-molecule structure for {drug.name}.
     </div>
   );

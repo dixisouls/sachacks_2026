@@ -17,10 +17,10 @@ function kind(id: string): string {
 export default function CitationChip({ id, item, onGraph }: { id: string; item?: EvidenceItem; onGraph?: (id: string) => void }) {
   const label = kind(id);
   const isGraph = id.startsWith("KG:");
-  const cls = `inline-flex items-center gap-1 rounded-md border px-1.5 py-px align-[1px] font-mono text-[11px] font-medium transition-colors ${
+  const cls = `inline-flex items-center gap-1 rounded-md px-1.5 py-px align-[1px] font-mono text-[11px] font-medium transition-colors ${
     isGraph
-      ? "border-gene/30 bg-gene-soft text-accent-ink hover:border-gene"
-      : "border-line bg-surface text-muted hover:border-accent hover:text-accent-ink"
+      ? "bg-accent-soft text-accent-ink hover:bg-[#C6E5DA]"
+      : "bg-soft text-muted hover:bg-[#d3ddd8] hover:text-foreground"
   }`;
   const title = item ? `${item.title}${item.snippet ? `. ${item.snippet}` : ""}` : id;
 
