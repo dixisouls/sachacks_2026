@@ -33,9 +33,13 @@ import scipy.sparse as sp
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ARTIFACTS = ROOT / "artifacts"
 
-# Component weights. Path A is the anchor at 1.0; tune the rest with scripts/rediscovery.py.
+# Component weights, chosen by the grid sweep in scripts/rediscovery.py (see artifacts/eval.json).
+# protein_homolog is 0: it did not improve rediscovery, so it does not move the ranking.
+# Homolog paths are still computed and shown as supporting context, because the
+# rediscovery test cannot measure them fairly -- it only asks about drugs whose
+# targets are already recorded, which is exactly the case that layer is not for.
 DEFAULT_WEIGHTS = {"shared_biology": 1.0, "sibling_disease": 0.5,
-                   "chemical_analog": 0.4, "protein_homolog": 0.4}
+                   "chemical_analog": 0.2, "protein_homolog": 0.0}
 
 
 def _degree_normalize(X: sp.csr_matrix, damping: float) -> sp.csr_matrix:
@@ -65,8 +69,13 @@ class FamilyInfo:
 
 class Scorer:
     def __init__(self, artifacts: Path = DEFAULT_ARTIFACTS, weights: dict | None = None,
-                 damping: float = 0.5):
+                 damping: float = 0.5, hide: set[tuple[str, str]] | None = None):
+        """hide: approved (drug_id, disease_id) indications to pretend we never knew about.
+        Used only by scripts/rediscovery.py. It removes those edges from both the
+        sibling-disease path and the already-approved exclusion, so a held-out
+        treatment has a fair chance of being rediscovered."""
         self.w = {**DEFAULT_WEIGHTS, **(weights or {})}
+        self.hide = hide or set()
         a = Path(artifacts)
         self.drugs = pl.read_parquet(a / "drugs.parquet")
         self.genes = pl.read_parquet(a / "genes.parquet")
@@ -122,6 +131,8 @@ class Scorer:
         self.disease_name = self.diseases["name"].to_list()
         self.disease_id = self.diseases["disease_id"].to_list()
 
+        if self.hide:
+            self._apply_holdout()
         self._index_drug_disease()
         self._drug_gene_rel = {
             (r[0], r[1]): (r[2], r[3]) for r in self.drug_gene.select(
@@ -129,6 +140,30 @@ class Scorer:
         }
 
     # ------------------------------------------------------------------ setup
+    def _apply_holdout(self) -> None:
+        """Drop the hidden approved indications, then rebuild I from what is left.
+        A pair is only removed from I if no trial indication survives for it."""
+        keep = ~(
+            (pl.col("relation") == "INDICATION")
+            & (pl.col("status") == "approved")
+            & pl.struct("drug_id", "disease_id").map_elements(
+                lambda r: (r["drug_id"], r["disease_id"]) in self.hide, return_dtype=pl.Boolean)
+        )
+        self.drug_disease = self.drug_disease.filter(keep)
+
+        ind = self.drug_disease.filter(
+            (pl.col("relation") == "INDICATION") & pl.col("status").is_in(["approved", "trial"]))
+        rows, cols = [], []
+        for drug_id, dis_id in ind.select("drug_id", "disease_id").iter_rows():
+            di, si = self.drug_idx.get(drug_id), self.disease_idx.get(dis_id)
+            if di is not None and si is not None:
+                rows.append(di)
+                cols.append(si)
+        I = sp.coo_matrix((np.ones(len(rows), dtype=np.float32), (rows, cols)),
+                          shape=self.I.shape).tocsr()
+        I.data[:] = 1.0
+        self.I = I
+
     def _index_drug_disease(self) -> None:
         self.by_disease: dict[int, list[tuple]] = defaultdict(list)
         for drug_id, dis_id, rel, phase, status, trial_ids in self.drug_disease.select(

@@ -13,3 +13,8 @@ rdkit>=2024.3
 # The protein sequence layer also needs the `mmseqs` binary at build time:
 #   macOS/Linux:  brew install mmseqs2     or  conda install -c bioconda mmseqs2
 # Not needed to run the app: artifacts/S.npz is committed.
+
+# backend API (api/main.py)
+fastapi>=0.110
+uvicorn[standard]>=0.29
+httpx>=0.27

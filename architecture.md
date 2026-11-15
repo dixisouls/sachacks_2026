@@ -13,9 +13,9 @@ All numbers below were measured on the OptimusKG v3.2 largest connected componen
 | 1 | Artifacts | `scripts/load_graph.py`, `scripts/build_artifacts.py` | Done. 12.6 MB, builds in ~6 s |
 | 2 | Scoring core, two lists, search, CLI | `api/scoring.py`, `api/search.py`, `scripts/query.py` | Done. ~3 ms per disease |
 | 2b | Compound and sequence similarity layers | `scripts/build_similarity.py` | Done. +0.4 MB, ~35 s |
-| 3 | Rediscovery test | `scripts/rediscovery.py` | Next: tunes the four weights |
-| 4 | Backend API | `api/main.py`, `api/models.py` | |
-| 5 | Frontend skeleton (search, two lists, path graph) | `web/` | |
+| 3 | Rediscovery test | `scripts/rediscovery.py` | Done. Hits@10 0.197, see §5.0 |
+| 4 | Backend API | `api/main.py`, `api/models.py`, `api/logging_setup.py` | Done. `uvicorn api.main:app --reload`, docs at `/docs` |
+| 5 | Frontend skeleton (search, two lists, path graph) | `web/` | Next, and unblocked |
 | 6 | Evidence + brief | `api/evidence/`, `api/brief.py` | |
 | 7 | 3D structures | `api/structures.py`, `StructureViewer.tsx` | |
 | 8 | Hosting + prewarm | `scripts/prewarm.py`, deploy config | |
@@ -282,7 +282,36 @@ If `n_genes(j) < 5` and there is no sibling signal, the API returns `warning: "L
 
 ---
 
-## 5. Validation: rediscovery test (`scripts/rediscovery.py`)
+## 5. Validation: rediscovery test (`scripts/rediscovery.py`) — DONE
+
+### 5.0 Results
+
+Full run, 1,618 held-out pairs, reported on split seed 7 while the weights were tuned on seed 42.
+
+| Method | Hits@10 | Hits@50 | MRR | Median rank |
+|:-|-:|-:|-:|-:|
+| **RepurposeKG** (shipped weights) | **0.197 ± 0.013** | 0.370 | 0.096 | 55 |
+| graph paths + chemical | 0.201 ± 0.013 | 0.371 | 0.094 | 53 |
+| graph paths only | 0.184 ± 0.012 | 0.362 | 0.094 | 53 |
+| graph paths + homology | 0.184 ± 0.012 | 0.343 | 0.091 | 61 |
+| path A alone | 0.135 ± 0.011 | 0.256 | 0.070 | 76 |
+| path B alone | 0.096 ± 0.009 | 0.190 | 0.052 | 24 |
+| popularity baseline | 0.029 ± 0.005 | 0.074 | 0.013 | 616 |
+| random baseline | 0.002 ± 0.001 | 0.015 | 0.003 | 1337 |
+
+**The line for the demo:** about **1 in 5 hidden known treatments comes back in the top 10**, roughly 7× the popularity baseline and 100× random.
+
+What the table also says, and we should say out loud if asked:
+
+* The two graph paths are worth far more together (0.184) than either alone (0.135, 0.096). They find different things.
+* Chemical similarity gives a small lift that sits inside one standard error. Honest wording: it helps slightly and clearly does not hurt.
+* **Protein homology did not improve ranking, so its weight tuned to 0.** It is kept for explanation only. The reason it cannot win here is structural: the positive set is approved indications, which by definition involve drugs whose targets the graph already records, and that is precisely the case the homology layer is not for. The test cannot measure its intended use, so a zero weight is not the same as a verdict that the idea is wrong.
+* Of 1,618 held-out pairs, **616 were not recoverable** because the drug is approved for a parent or child of the hidden disease and stays excluded on training data alone. Those are reported separately, never counted as hits, because the product never shows those drugs. A further 242 scored zero and count as misses.
+* Weights were selected on MRR, not Hits@10: on this grid the best Hits@10 values sit well inside one standard error of each other, so selecting on them would be fitting noise.
+
+Reproduce with `python scripts/rediscovery.py --tune` (about 90 s). Results land in `artifacts/eval.json`.
+
+### 5.1 Method
 
 1. Positive set = **approved** indications only (§2.4). Seed = 42.
 2. Hide a random 20% of them.

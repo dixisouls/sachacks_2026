@@ -1,0 +1,123 @@
+{
+  "generated_at": "2026-11-15T11:01:50",
+  "holdout_fraction": 0.2,
+  "positive_set": {
+    "pairs": 8217,
+    "drugs": 2221,
+    "diseases": 1189
+  },
+  "sample": null,
+  "weights": {
+    "shared_biology": 1.0,
+    "sibling_disease": 0.5,
+    "chemical_analog": 0.2,
+    "protein_homolog": 0.0
+  },
+  "tuning": {
+    "split_seed": 42,
+    "pairs": 1671,
+    "grid_size": 64,
+    "best": {
+      "shared_biology": 1.0,
+      "sibling_disease": 0.5,
+      "chemical_analog": 0.2,
+      "protein_homolog": 0.0
+    },
+    "best_on_tuning_split": {
+      "scored_pairs": 1002,
+      "unreachable": 237,
+      "hits@10": 0.1816,
+      "hits@10_se": 0.0122,
+      "hits@50": 0.3503,
+      "hits@100": 0.4521,
+      "mrr": 0.0925,
+      "median_rank": 64
+    }
+  },
+  "report_split_seed": 7,
+  "methods": {
+    "repurposekg": {
+      "scored_pairs": 1002,
+      "unreachable": 242,
+      "hits@10": 0.1966,
+      "hits@10_se": 0.0126,
+      "hits@50": 0.3703,
+      "hits@100": 0.4611,
+      "mrr": 0.0955,
+      "median_rank": 55
+    },
+    "graph_only": {
+      "scored_pairs": 1002,
+      "unreachable": 268,
+      "hits@10": 0.1836,
+      "hits@10_se": 0.0122,
+      "hits@50": 0.3623,
+      "hits@100": 0.4551,
+      "mrr": 0.0943,
+      "median_rank": 53
+    },
+    "path_a_only": {
+      "scored_pairs": 1002,
+      "unreachable": 373,
+      "hits@10": 0.1347,
+      "hits@10_se": 0.0108,
+      "hits@50": 0.2555,
+      "hits@100": 0.3533,
+      "mrr": 0.0704,
+      "median_rank": 76
+    },
+    "path_b_only": {
+      "scored_pairs": 1002,
+      "unreachable": 720,
+      "hits@10": 0.0958,
+      "hits@10_se": 0.0093,
+      "hits@50": 0.1896,
+      "hits@100": 0.2365,
+      "mrr": 0.0516,
+      "median_rank": 24
+    },
+    "graph_plus_chem": {
+      "scored_pairs": 1002,
+      "unreachable": 242,
+      "hits@10": 0.2006,
+      "hits@10_se": 0.0127,
+      "hits@50": 0.3713,
+      "hits@100": 0.4621,
+      "mrr": 0.0941,
+      "median_rank": 53
+    },
+    "graph_plus_homolog": {
+      "scored_pairs": 1002,
+      "unreachable": 263,
+      "hits@10": 0.1836,
+      "hits@10_se": 0.0122,
+      "hits@50": 0.3433,
+      "hits@100": 0.4371,
+      "mrr": 0.0914,
+      "median_rank": 61
+    },
+    "popularity": {
+      "scored_pairs": 1002,
+      "unreachable": 83,
+      "hits@10": 0.0289,
+      "hits@10_se": 0.0053,
+      "hits@50": 0.0739,
+      "hits@100": 0.1347,
+      "mrr": 0.0129,
+      "median_rank": 616
+    },
+    "random": {
+      "scored_pairs": 1002,
+      "unreachable": 0,
+      "hits@10": 0.002,
+      "hits@10_se": 0.0014,
+      "hits@50": 0.015,
+      "hits@100": 0.0269,
+      "mrr": 0.0029,
+      "median_rank": 1337
+    }
+  },
+  "not_recoverable": 616,
+  "diseases": 576,
+  "seconds": 7.0
+}
