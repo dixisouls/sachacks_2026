@@ -1,0 +1,405 @@
+// Mount (for DetailPanel): const StructureViewer = lazy(() => import("./StructureViewer"));
+//   <Suspense fallback={null}><StructureViewer drugId={drugId} geneId={selectedGeneId} /></Suspense>
+// Needs a QueryClientProvider above it, VITE_API_URL set, and: npm i --save-exact 3dmol@2.5.5 smiles-drawer@2.4.1
+//
+// 3D structure for one (drug, gene) pair, architecture.md §9.3–9.4.
+// Data: GET /api/structures?drug_id=&gene_id= → StructurePlan (api/structures.py).
+// 3dmol and smiles-drawer are dynamically imported, so neither lands in the main bundle.
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import type { GLViewer } from "3dmol";
+
+// ── types (mirror api/structures.py) ─────────────────────────────────────────
+
+export interface DrugStructure {
+  format: "sdf";
+  file_url: string | null;
+  smiles: string | null;
+  name: string;
+}
+
+export interface ProteinStructure {
+  source: "PDB" | "AlphaFold";
+  id: string;
+  format: "cif" | "pdb";
+  file_url: string;
+  uniprot_id: string;
+  gene_symbol: string;
+  mean_plddt: number | null;
+}
+
+export interface StructurePlan {
+  mode: "BOUND" | "SEPARATE" | "DRUG_ONLY" | "NONE";
+  drug: DrugStructure;
+  protein: ProteinStructure | null;
+  ligand_comp_id: string | null;
+  ligand_match: "exact" | "stereo_relaxed" | null;
+  resolution_A: number | null;
+  caption: string;
+}
+
+const API = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+
+async function fetchPlan(drugId: string, geneId: string): Promise<StructurePlan> {
+  const q = new URLSearchParams({ drug_id: drugId, gene_id: geneId });
+  const r = await fetch(`${API}/api/structures?${q}`);
+  if (!r.ok) throw new Error(`structures ${r.status}`);
+  return r.json();
+}
+
+async function fetchText(fileUrl: string): Promise<string> {
+  const r = await fetch(`${API}${fileUrl}`);
+  if (!r.ok) throw new Error(`structure file ${r.status}`);
+  return r.text();
+}
+
+// ── pLDDT colors (AlphaFold stores pLDDT in the B-factor column) ─────────────
+
+const PLDDT_BINS = [
+  { min: 90, color: "#0053D6", label: "Very high (>90)" },
+  { min: 70, color: "#65CBF3", label: "Confident (70–90)" },
+  { min: 50, color: "#FFDB13", label: "Low (50–70)" },
+  { min: -Infinity, color: "#FF7D45", label: "Very low (<50)" },
+];
+const plddtColor = (atom: { b?: number }) =>
+  PLDDT_BINS.find((bin) => (atom.b ?? 0) > bin.min)!.color;
+
+// ── one 3Dmol canvas ─────────────────────────────────────────────────────────
+
+type Setup = (viewer: GLViewer, $3Dmol: typeof import("3dmol"), opts: { surface: boolean }) => void;
+
+interface MolCanvasProps {
+  /** file_url → format; all are loaded into the same viewer */
+  files: { url: string; format: string }[];
+  /** styles and camera; also re-run when `surface` toggles */
+  setup: Setup;
+  surface: boolean;
+  resetSignal: number;
+  className?: string;
+}
+
+function MolCanvas({ files, setup, surface, resetSignal, className }: MolCanvasProps) {
+  const host = useRef<HTMLDivElement>(null);
+  const viewerRef = useRef<GLViewer | null>(null);
+  const libRef = useRef<typeof import("3dmol") | null>(null);
+  const homeView = useRef<number[] | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const filesKey = files.map((f) => f.url).join("|");
+
+  // Create the viewer and load the models once per set of files.
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("loading");
+    (async () => {
+      try {
+        const [$3Dmol, texts] = await Promise.all([
+          import("3dmol"),
+          Promise.all(files.map((f) => fetchText(f.url))),
+        ]);
+        if (cancelled || !host.current) return;
+        const viewer = $3Dmol.createViewer(host.current, { backgroundColor: "white" });
+        texts.forEach((t, i) => viewer.addModel(t, files[i].format));
+        viewerRef.current = viewer;
+        libRef.current = $3Dmol;
+        setStatus("ready");
+      } catch {
+        if (!cancelled) setStatus("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+      const viewer = viewerRef.current;
+      viewerRef.current = null;
+      homeView.current = null;
+      if (viewer) {
+        viewer.clear();
+        // clear() empties the scene but keeps the GL context; browsers cap live contexts
+        // (~16), so release it explicitly or switching drugs eventually blanks viewers.
+        const canvas = viewer.getCanvas();
+        const gl = canvas.getContext("webgl2") ?? canvas.getContext("webgl");
+        gl?.getExtension("WEBGL_lose_context")?.loseContext();
+        canvas.remove();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filesKey]);
+
+  // Apply styles (and the surface toggle) whenever they change.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    const $3Dmol = libRef.current;
+    if (status !== "ready" || !viewer || !$3Dmol) return;
+    viewer.removeAllSurfaces();
+    viewer.setStyle({}, {});
+    setup(viewer, $3Dmol, { surface });
+    if (!homeView.current) homeView.current = viewer.getView();
+    viewer.render();
+  }, [status, setup, surface]);
+
+  // Reset view button.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (resetSignal && viewer && homeView.current) {
+      viewer.setView(homeView.current);
+      viewer.render();
+    }
+  }, [resetSignal]);
+
+  // Keep the canvas sized to its box.
+  useEffect(() => {
+    if (!host.current) return;
+    const ro = new ResizeObserver(() => viewerRef.current?.resize().render());
+    ro.observe(host.current);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div className={`relative overflow-hidden rounded-md border border-gray-200 bg-white ${className ?? ""}`}>
+      <div ref={host} className="absolute inset-0" />
+      {status !== "ready" && (
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500">
+          {status === "loading" ? "Loading structure…" : "Could not load this structure file."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 2D fallback ──────────────────────────────────────────────────────────────
+
+function Smiles2D({ smiles, className }: { smiles: string; className?: string }) {
+  const svg = useRef<SVGSVGElement>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setFailed(false);
+    import("smiles-drawer").then(({ default: SmilesDrawer }) => {
+      if (cancelled || !svg.current) return;
+      const drawer = new SmilesDrawer.SvgDrawer({ width: 320, height: 240 });
+      SmilesDrawer.parse(
+        smiles,
+        (tree) => !cancelled && svg.current && drawer.draw(tree, svg.current, "light"),
+        () => !cancelled && setFailed(true),
+      );
+    });
+    return () => {
+      cancelled = true;
+      svg.current?.replaceChildren();
+    };
+  }, [smiles]);
+
+  return failed ? (
+    <p className="text-sm text-gray-500">Could not draw this molecule.</p>
+  ) : (
+    <svg ref={svg} className={className} role="img" aria-label="2D structure drawing" />
+  );
+}
+
+// ── small UI pieces ──────────────────────────────────────────────────────────
+
+function PlddtLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
+      <span className="font-medium">pLDDT</span>
+      {PLDDT_BINS.map((b) => (
+        <span key={b.label} className="flex items-center gap-1">
+          <span className="inline-block h-3 w-3 rounded-sm" style={{ background: b.color }} />
+          {b.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function useIsNarrow(query = "(max-width: 639px)") {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = () => setNarrow(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [query]);
+  return narrow;
+}
+
+const btn =
+  "rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 " +
+  "aria-pressed:bg-gray-800 aria-pressed:text-white";
+
+// ── style setups per mode (§9.3) ─────────────────────────────────────────────
+
+/** zoomTo fits the model to the canvas height; shrink it in tall/narrow panels so it isn't cropped. */
+function fitWidth(viewer: GLViewer, minAspect = 1.4) {
+  const c = viewer.getCanvas();
+  const aspect = c.clientWidth / Math.max(c.clientHeight, 1);
+  if (aspect < minAspect) viewer.zoom(aspect / minAspect);
+}
+
+const drugSticks: Setup = (viewer) => {
+  viewer.setStyle({}, { stick: { colorscheme: "greenCarbon" } });
+  viewer.zoomTo();
+  fitWidth(viewer);
+};
+
+function boundSetup(compId: string): Setup {
+  return (viewer, $3Dmol, { surface }) => {
+    // One copy of the ligand (entries can hold several, one per chain).
+    const first = viewer.selectedAtoms({ resn: compId })[0];
+    const ligand = first ? { resn: compId, chain: first.chain, resi: first.resi } : { resn: compId };
+    const pocket = { within: { distance: 5, sel: ligand }, byres: true, hetflag: false };
+
+    viewer.setStyle({ hetflag: false }, { cartoon: { color: "lightgrey" } });
+    viewer.addStyle(pocket, { stick: { colorscheme: "lightgreyCarbon", radius: 0.15 } });
+    viewer.setStyle(ligand, { stick: { colorscheme: "greenCarbon", radius: 0.25 } });
+    if (surface) viewer.addSurface($3Dmol.SurfaceType.VDW, { opacity: 0.35, color: "white" }, pocket);
+    // Frame the pocket, not just the ligand, so surrounding helices don't fill the view.
+    viewer.zoomTo({ within: { distance: 8, sel: ligand } }); // no spin by default
+  };
+}
+
+const plddtSetup: Setup = (viewer, $3Dmol, { surface }) => {
+  viewer.setStyle({}, { cartoon: { colorfunc: plddtColor } });
+  if (surface) viewer.addSurface($3Dmol.SurfaceType.VDW, { opacity: 0.4, color: "white" });
+  // Frame the confident core; long disordered tails (pLDDT < 70) otherwise shrink the fold.
+  const core = viewer.selectedAtoms({ predicate: (a: { b?: number }) => (a.b ?? 0) >= 70 });
+  viewer.zoomTo(core.length ? { predicate: (a: { b?: number }) => (a.b ?? 0) >= 70 } : {});
+  fitWidth(viewer);
+};
+
+// ── main component ───────────────────────────────────────────────────────────
+
+export interface StructureViewerProps {
+  drugId: string;
+  geneId: string;
+}
+
+export default function StructureViewer({ drugId, geneId }: StructureViewerProps) {
+  const { data: plan, isPending, isError, refetch } = useQuery({
+    queryKey: ["structure", drugId, geneId],
+    queryFn: () => fetchPlan(drugId, geneId),
+    staleTime: Infinity,
+    enabled: Boolean(drugId && geneId),
+  });
+
+  const [surface, setSurface] = useState(true);
+  const [reset, setReset] = useState(0);
+  const [pane, setPane] = useState<"protein" | "drug">("protein");
+  const narrow = useIsNarrow();
+  const doReset = useCallback(() => setReset((n) => n + 1), []);
+
+  // Surface defaults: on for the BOUND pocket, off for a whole AlphaFold model.
+  useEffect(() => {
+    if (plan) setSurface(plan.mode === "BOUND");
+    setPane("protein");
+  }, [plan]);
+
+  // Stable setup callbacks so MolCanvas only restyles when inputs change.
+  const compId = plan?.ligand_comp_id ?? "";
+  const bound = useCallback<Setup>((v, $, o) => boundSetup(compId)(v, $, o), [compId]);
+
+  if (isPending) {
+    return <div className="h-80 animate-pulse rounded-md bg-gray-100" aria-label="Loading structure" />;
+  }
+  if (isError || !plan) {
+    return (
+      <div className="rounded-md border border-gray-200 p-4 text-sm text-gray-600">
+        Structure lookup failed.{" "}
+        <button className="underline" onClick={() => refetch()}>Retry</button>
+      </div>
+    );
+  }
+
+  const { mode, drug, protein } = plan;
+  const hasProteinCanvas = (mode === "BOUND" || mode === "SEPARATE") && protein;
+  const hasSurfaceToggle = Boolean(hasProteinCanvas);
+
+  const drugPanel = drug.file_url ? (
+    <MolCanvas
+      files={[{ url: drug.file_url, format: "sdf" }]}
+      setup={drugSticks}
+      surface={false}
+      resetSignal={reset}
+      className="h-80"
+    />
+  ) : drug.smiles ? (
+    <div className="flex h-80 items-center justify-center rounded-md border border-gray-200 bg-white">
+      <Smiles2D smiles={drug.smiles} className="h-60 w-80 max-w-full" />
+    </div>
+  ) : (
+    <div className="flex h-80 items-center justify-center rounded-md border border-gray-200 text-sm text-gray-500">
+      No small-molecule structure for {drug.name}.
+    </div>
+  );
+
+  return (
+    <figure className="flex flex-col gap-2">
+      {/* controls */}
+      <div className="flex flex-wrap items-center gap-2">
+        {mode === "SEPARATE" && narrow && (
+          <div className="flex gap-1" role="tablist" aria-label="Viewer">
+            <button className={btn} aria-pressed={pane === "protein"} onClick={() => setPane("protein")}>
+              {protein?.gene_symbol ?? "Protein"}
+            </button>
+            <button className={btn} aria-pressed={pane === "drug"} onClick={() => setPane("drug")}>
+              {drug.name}
+            </button>
+          </div>
+        )}
+        {mode !== "NONE" && (
+          <button className={btn} onClick={doReset}>Reset view</button>
+        )}
+        {hasSurfaceToggle && (
+          <button className={btn} aria-pressed={surface} onClick={() => setSurface((s) => !s)}>
+            Surface
+          </button>
+        )}
+      </div>
+
+      {/* viewers */}
+      {mode === "BOUND" && protein && (
+        <MolCanvas
+          files={[{ url: protein.file_url, format: protein.format }]}
+          setup={bound}
+          surface={surface}
+          resetSignal={reset}
+          className="h-96"
+        />
+      )}
+
+      {mode === "SEPARATE" && protein && (
+        <div className="grid gap-2 sm:grid-cols-[2fr_1fr]">
+          {(!narrow || pane === "protein") && (
+            <MolCanvas
+              files={[{ url: protein.file_url, format: protein.format }]}
+              setup={plddtSetup}
+              surface={surface}
+              resetSignal={reset}
+              className="h-80"
+            />
+          )}
+          {(!narrow || pane === "drug") && drugPanel}
+        </div>
+      )}
+
+      {(mode === "DRUG_ONLY" || mode === "NONE") && drugPanel}
+
+      {/* legend + caption */}
+      {mode === "SEPARATE" && <PlddtLegend />}
+      <figcaption className="text-xs text-gray-600">
+        {plan.caption}
+        {mode === "BOUND" && plan.ligand_match === "stereo_relaxed" && (
+          <span className="block text-gray-500">
+            PDB ligand {plan.ligand_comp_id} matches {drug.name}'s structure; stereochemistry not compared.
+          </span>
+        )}
+        {mode === "SEPARATE" && (
+          <span className="block text-gray-500">
+            Drug shown separately. No docking or predicted binding pose.
+          </span>
+        )}
+      </figcaption>
+    </figure>
+  );
+}
