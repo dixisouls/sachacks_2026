@@ -1,0 +1,12 @@
+# Only needed to rebuild artifacts/ from the raw OptimusKG graph.
+# Not needed to run the app: artifacts are committed.
+#   pip install -r requirements.txt -r requirements-build.txt
+-r requirements.txt
+
+optimuskg>=1.0        # scripts/build_artifacts.py, downloads the graph on first run
+requests>=2.31
+rdkit>=2024.3         # scripts/build_similarity.py, chemical similarity
+
+# The protein sequence layer also needs the `mmseqs` binary:
+#   macOS/Linux:  brew install mmseqs2    or    conda install -c bioconda mmseqs2
+# Also build-time only: artifacts/S.npz is committed.
