@@ -200,6 +200,8 @@ export interface DesignEvaluation {
   status: CheckStatus;
   summary: string;
   checks: DesignCheck[];
+  /** The molecule placed in the drug's measured position, when one exists. */
+  pose_sdf?: string;
   properties: {
     formula?: string;
     mol_weight?: number;
@@ -214,6 +216,14 @@ export interface DesignEvaluation {
     sa_score?: number;
     parent_similarity?: number;
     nearest_drug?: { drug_id: string; name: string; similarity: number };
+    pocket?: {
+      pdb_id: string;
+      clashes: number;
+      atoms: number;
+      rmsd: number;
+      core_atoms: number;
+      closest_A: number;
+    };
   };
 }
 
@@ -234,6 +244,7 @@ export interface DesignEvent {
     | "context"
     | "round"
     | "baseline"
+    | "pocket"
     | "thinking" // the reasoning so far, resent as it grows
     | "reasoning"
     | "molecule"
@@ -272,6 +283,8 @@ export interface DesignJob {
   best: DesignAttempt | null;
   /** The drug this was designed from, scored on the same checks. */
   parent?: { name: string; smiles: string; check?: DesignEvaluation };
+  /** The crystal structure used to test fit, when the drug has one. */
+  pocket?: { pdb_id: string; resolution_A: number | null } | null;
   /** Share of random unrelated molecules that also pass every check. */
   random_pass_rate?: number;
   error: string | null;

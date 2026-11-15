@@ -11,6 +11,7 @@ import { designStreamUrl, getDesign, startDesign, USE_MOCKS } from "@/lib/api";
 import type { CheckStatus, DesignAttempt, DesignEvaluation, DesignEvent, DesignJob } from "@/lib/types";
 import ErrorCard from "./ErrorCard";
 import Molecule2D from "./Molecule2D";
+import PoseViewer from "./PoseViewer";
 
 const TONE: Record<CheckStatus, { dot: string; chip: string; word: string }> = {
   pass: { dot: "bg-[#0B7A69]", chip: "bg-mint text-accent-ink", word: "Nothing wrong found" },
@@ -137,7 +138,7 @@ export default function DesignPanel({
             </h3>
             <Badge status={best.check.status} />
           </div>
-          <AttemptBody attempt={best} big />
+          <AttemptBody attempt={best} big parentName={job?.parent?.name} />
         </section>
       )}
 
@@ -162,6 +163,7 @@ export default function DesignPanel({
                   isBest={best?.id === attempt.id}
                   open={open === attempt.id}
                   onToggle={() => setOpen(open === attempt.id ? null : attempt.id)}
+                  parentName={job?.parent?.name}
                 />
               </li>
             ))}
@@ -361,11 +363,12 @@ function Badge({ status }: { status: CheckStatus }) {
   );
 }
 
-function AttemptRow({ attempt, isBest, open, onToggle }: {
+function AttemptRow({ attempt, isBest, open, onToggle, parentName }: {
   attempt: DesignAttempt;
   isBest: boolean;
   open: boolean;
   onToggle: () => void;
+  parentName?: string;
 }) {
   const failed = attempt.check.status === "fail";
   return (
@@ -397,16 +400,21 @@ function AttemptRow({ attempt, isBest, open, onToggle }: {
       </button>
       {open && (
         <div className="px-4 pb-4">
-          <AttemptBody attempt={attempt} />
+          <AttemptBody attempt={attempt} parentName={parentName} />
         </div>
       )}
     </div>
   );
 }
 
-function AttemptBody({ attempt, big = false }: { attempt: DesignAttempt; big?: boolean }) {
+function AttemptBody({ attempt, big = false, parentName }: {
+  attempt: DesignAttempt;
+  big?: boolean;
+  parentName?: string;
+}) {
   const { check, rationale, builds_on: buildsOn } = attempt;
   const props = check.properties;
+  const pose = check.pose_sdf && props.pocket ? props.pocket : null;
   return (
     <div className="mt-3 space-y-4">
       <div className={`grid gap-4 ${big ? "sm:grid-cols-[260px_1fr]" : "sm:grid-cols-[200px_1fr]"}`}>
@@ -427,6 +435,15 @@ function AttemptBody({ attempt, big = false }: { attempt: DesignAttempt; big?: b
           )}
         </div>
       </div>
+
+      {pose && check.pose_sdf && (
+        <PoseViewer
+          pdbId={pose.pdb_id}
+          sdf={check.pose_sdf}
+          clashes={pose.clashes}
+          drugName={parentName ?? "the original drug"}
+        />
+      )}
 
       {check.checks.length > 0 && (
         <ul className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
