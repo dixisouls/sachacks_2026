@@ -103,7 +103,7 @@ function Link({ link, lg, flow }: { link?: ChainLink; lg: boolean; flow: boolean
       />
       {link?.label && (
         <span
-          className={`relative whitespace-nowrap rounded-full border border-line bg-surface px-2 py-0.5 font-medium text-muted max-sm:ml-4 ${
+          className={`relative whitespace-nowrap rounded-full bg-surface px-2 py-0.5 shadow-[0_1px_2px_rgba(var(--shadow),0.08)] font-medium text-muted max-sm:ml-4 ${
             lg ? "text-[12px]" : "text-[11px]"
           }`}
         >

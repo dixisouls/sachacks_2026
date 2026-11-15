@@ -106,7 +106,7 @@ export default function DetailPanel({
           href={`/d/${encodeURIComponent(diseaseId)}`}
           scroll={false}
           aria-label="Close"
-          className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full text-faint transition-colors hover:bg-sunken hover:text-foreground max-lg:hidden"
+          className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full text-faint transition-colors hover:bg-soft-2 hover:text-foreground max-lg:hidden"
         >
           <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24">
             <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -134,7 +134,7 @@ export default function DetailPanel({
                   href={`https://clinicaltrials.gov/study/${t}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-full border border-line px-2.5 py-1 font-mono text-[11.5px] text-accent-ink hover:border-accent"
+                  className="rounded-full bg-[#DFE9FA] px-2.5 py-1 font-mono text-[11.5px] text-[#1D4E99] hover:underline"
                   title="Open the trial on ClinicalTrials.gov"
                 >
                   {t}
@@ -152,7 +152,7 @@ export default function DetailPanel({
       </header>
 
       {/* the short version: the strongest path, drawn big */}
-      <section aria-label="Strongest reason" className="border-y border-line bg-field px-5 py-6 sm:px-8">
+      <section aria-label="Strongest reason" className="mx-3 rounded-[28px] bg-soft-2 px-4 py-6 sm:mx-5 sm:px-6">
         {paths.isLoading && <div className="skeleton h-[74px]" />}
         {paths.data && lead && (
           <div key={drugId}>
@@ -168,14 +168,14 @@ export default function DetailPanel({
 
       {/* tabs: three equal parts */}
       <div className="px-5 pt-5 sm:px-8">
-        <div role="tablist" aria-label="Details" className="grid grid-cols-3 gap-1 rounded-[14px] bg-sunken p-1 text-[13.5px] font-semibold sm:text-[14px]">
+        <div role="tablist" aria-label="Details" className="grid grid-cols-3 gap-1 rounded-full bg-soft p-1 text-[13.5px] font-semibold sm:text-[14px]">
           {tabs.map((t) => (
             <button
               key={t.key}
               role="tab"
               aria-selected={tab === t.key}
               onClick={() => setTab(t.key)}
-              className={`flex h-10 items-center justify-center gap-1.5 rounded-[11px] px-2 transition-colors ${
+              className={`flex h-10 items-center justify-center gap-1.5 rounded-full px-2 transition-colors ${
                 tab === t.key ? "bg-surface text-foreground shadow-soft" : "text-muted hover:text-foreground"
               }`}
             >
@@ -204,7 +204,7 @@ export default function DetailPanel({
                 </Heading>
                 <ol className="space-y-3">
                   {paths.data.paths.map((p, i) => (
-                    <li key={i} className="rounded-2xl border border-line p-4">
+                    <li key={i} className="rounded-3xl bg-soft-2 p-4">
                       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                         <span className="text-[14px] font-bold">
                           {PATH_LABEL[p.type]}
@@ -269,7 +269,7 @@ function Fact({ children, tone }: { children: React.ReactNode; tone?: "red" }) {
   return (
     <span
       className={`rounded-full px-2.5 py-1 text-[12.5px] font-semibold ${
-        tone === "red" ? "bg-[#FBE4DE] text-[#8A2A14]" : "bg-sunken text-muted"
+        tone === "red" ? "bg-[#FBE4DE] text-[#8A2A14]" : "bg-soft-2 text-muted"
       }`}
     >
       {children}
