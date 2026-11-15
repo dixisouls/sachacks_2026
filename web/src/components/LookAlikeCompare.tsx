@@ -31,12 +31,12 @@ export default function LookAlikeCompare({ drugId, drugName, analogs }: { drugId
   const c = q.data;
 
   return (
-    <section aria-labelledby="lookalike-h" className="rounded-[28px] bg-field p-4 sm:p-6">
+    <section aria-labelledby="lookalike-h" className="rounded-2xl border border-line p-4 sm:p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 id="lookalike-h" className="text-[15px] font-bold">
-          Look-alike, compared
+        <h3 id="lookalike-h" className="text-[18px] font-bold tracking-[-0.015em]">
+          Side by side with its look-alike
         </h3>
-        <p className="text-[13px] text-muted">Inferred from structure, not recorded in the graph</p>
+        <p className="text-[13px] text-muted">Inferred from shape, not recorded in the graph</p>
       </div>
 
       {analogs.length > 1 && (
@@ -46,8 +46,8 @@ export default function LookAlikeCompare({ drugId, drugName, analogs }: { drugId
               key={a.id}
               aria-pressed={a.id === other.id}
               onClick={() => setPick(a.id)}
-              className={`min-h-11 rounded-full px-4 text-sm font-bold transition-colors ${
-                a.id === other.id ? "bg-foreground text-background" : "bg-surface text-foreground hover:bg-soft"
+              className={`h-10 rounded-full border px-4 text-sm font-semibold transition-colors ${
+                a.id === other.id ? "border-foreground bg-foreground text-surface" : "border-line bg-surface hover:border-foreground"
               }`}
             >
               {drugLabel(a.label, a.id)}
@@ -74,14 +74,14 @@ export default function LookAlikeCompare({ drugId, drugName, analogs }: { drugId
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-muted">
-            <Key colour={SHARED} label={`Shared core · ${c.shared_atoms} atoms`} />
+            <Key colour={SHARED} label={`Shared core, ${c.shared_atoms} atoms`} />
             <Key colour={LEFT} label={`Only in ${drugLabel(c.left.name, c.left.drug_id)}`} />
             <Key colour={RIGHT} label={`Only in ${drugLabel(c.right.name, c.right.drug_id)}`} />
           </div>
 
           <div className="mt-5 flex flex-wrap gap-x-10 gap-y-4">
-            <Number value={pct(c.tanimoto)} label="Flat 2D similarity, what the ranking used" />
-            <Number value={pct(c.tanimoto_stereo)} label="Counting 3D handedness" muted={c.tanimoto_stereo === c.tanimoto} />
+            <Number value={pct(c.tanimoto)} label="Alike as flat drawings (what the ranking used)" />
+            <Number value={pct(c.tanimoto_stereo)} label="Alike once 3D handedness counts" muted={c.tanimoto_stereo === c.tanimoto} />
           </div>
 
           <p className="mt-4 text-[15px] leading-relaxed">
@@ -111,7 +111,7 @@ function Molecule({ m, fallback, accent }: { m: MoleculeImage; fallback: string;
   // rendered as an <img> data URI, never injected as markup
   const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(m.svg)}`;
   return (
-    <figure className="m-0 rounded-[22px] bg-surface p-3">
+    <figure className="m-0 rounded-xl border border-line bg-surface p-3">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt={`2D structure of ${name}, shared core in grey`} className="mx-auto aspect-[340/260] w-full max-w-[340px]" />
       <figcaption className="mt-1 flex items-center justify-between gap-2 px-1 text-sm">
@@ -139,8 +139,8 @@ function Key({ colour, label }: { colour: string; label: string }) {
 function Number({ value, label, muted = false }: { value: string; label: string; muted?: boolean }) {
   return (
     <div>
-      <div className={`text-[28px] font-extrabold leading-none tracking-tight ${muted ? "text-muted" : ""}`}>{value}</div>
-      <div className="mt-1 max-w-[200px] text-[13px] text-muted">{label}</div>
+      <div className={`text-[30px] font-bold leading-none tracking-[-0.03em] tabular-nums ${muted ? "text-muted" : ""}`}>{value}</div>
+      <div className="mt-1.5 max-w-[220px] text-[13px] text-muted">{label}</div>
     </div>
   );
 }

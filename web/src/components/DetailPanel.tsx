@@ -4,16 +4,44 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { getBrief, getPaths } from "@/lib/api";
-import { drugLabel, PATH_LABEL, softenNames } from "@/lib/format";
-import type { Candidate, DiseaseSummary, PathNode, PathType } from "@/lib/types";
+import { drugLabel, PATH_HINT, PATH_LABEL, softenNames, titleCase } from "@/lib/format";
+import type { Candidate, DiseaseSummary, Path, PathNode, PathsResponse, PathType } from "@/lib/types";
 import BriefView from "./BriefView";
+import Chain, { type ChainLink, type ChainNode } from "./Chain";
 import ErrorCard from "./ErrorCard";
 import LookAlikeCompare, { type Analog } from "./LookAlikeCompare";
 import PathGraph from "./PathGraph";
 import ReadinessBadge from "./ReadinessBadge";
+import ScoreMeter from "./ScoreMeter";
 import StructurePanel from "./StructurePanel";
 
-type Tab = "path" | "structure" | "brief";
+type Tab = "why" | "evidence" | "structure";
+
+/** One path from the API as chain nodes and labelled links. */
+function toChain(p: Path, data: PathsResponse): { nodes: ChainNode[]; links: ChainLink[] } {
+  const byId = new Map(data.nodes.map((n) => [n.id, n]));
+  const nodes: ChainNode[] = p.nodes.map((id) => {
+    const n = byId.get(id);
+    const type = n?.type ?? "gene";
+    return { id, type, label: type === "gene" ? n?.label ?? id : titleCase(n?.label) || id };
+  });
+  const links: ChainLink[] = p.nodes.slice(1).map((b, i) => {
+    const a = p.nodes[i];
+    const e = data.edges.find((x) => (x.source === a && x.target === b) || (x.source === b && x.target === a));
+    if (!e) return { dashed: p.inferred };
+    const pct = e.weight != null ? `${Math.round(e.weight * 100)}%` : "";
+    const label =
+      e.relation === "ASSOCIATED_WITH"
+        ? "linked to"
+        : e.relation === "SIMILAR_STRUCTURE"
+          ? `${pct} same shape`
+          : e.relation === "SIMILAR_SEQUENCE"
+            ? `${pct} same sequence`
+            : e.relation.toLowerCase().replace(/_/g, " ");
+    return { label, dashed: e.inferred };
+  });
+  return { nodes, links };
+}
 
 export default function DetailPanel({
   disease,
@@ -26,12 +54,12 @@ export default function DetailPanel({
 }) {
   const drugId = candidate.drug_id;
   const diseaseId = disease.disease_id;
-  const [tab, setTab] = useState<Tab>("path");
+  const [tab, setTab] = useState<Tab>("why");
   const [highlight, setHighlight] = useState<string | null>(null);
   const [gene, setGene] = useState<string | null>(null);
 
   const paths = useQuery({ queryKey: ["paths", diseaseId, drugId], queryFn: () => getPaths(drugId, diseaseId) });
-  // brief is the slowest call, so it starts as soon as the sheet opens (architecture.md §10.3)
+  // brief is the slowest call, so it starts as soon as the panel opens (architecture.md §10.3)
   const brief = useQuery({ queryKey: ["brief", diseaseId, drugId], queryFn: () => getBrief(drugId, diseaseId) });
 
   useEffect(() => {
@@ -54,114 +82,164 @@ export default function DetailPanel({
       const node = paths.data?.nodes.find((n) => n.id === id);
       out.push({ id, label: node?.label ?? null, similarity: p.similarity ?? null });
     }
-    // closest look-alike first
     return out.sort((x, y) => (y.similarity ?? 0) - (x.similarity ?? 0));
   }, [paths.data]);
   const name = drugLabel(candidate.drug_name, drugId);
+  const lead = paths.data?.paths[0];
+  const openGene = (id: string) => {
+    setGene(id);
+    setTab("structure");
+  };
 
-  const tabs: { key: Tab; label: string; busy?: boolean }[] = [
-    { key: "path", label: "Path" },
-    { key: "structure", label: "Structure" },
-    { key: "brief", label: "Brief", busy: brief.isLoading },
+  const nReasons = paths.data?.paths.length;
+  const tabs: { key: Tab; label: string; note?: string; busy?: boolean }[] = [
+    { key: "why", label: "Why it's here", note: nReasons != null ? String(nReasons) : undefined },
+    { key: "evidence", label: "Evidence", busy: brief.isLoading },
+    { key: "structure", label: "3D structure" },
   ];
 
   return (
-    <div className="relative rounded-[28px] bg-surface p-5 shadow-float sm:rounded-[36px] sm:p-10 [animation:fadein_.35s_ease]">
-      <div className="flex items-start gap-4 pr-10">
-        <div className="min-w-0 flex-1">
-          <h2 className="break-words text-[clamp(28px,3.5vw,42px)] font-extrabold leading-[1.05] tracking-[-0.035em]">{name}</h2>
-          <p className="mt-2 text-[15px] text-muted">
-            for {disease.name} · <span className="font-mono text-[13px]">{drugId}</span>
-          </p>
-        </div>
-        <div className="text-right">
-          <div className="text-[34px] font-extrabold leading-none tracking-[-0.04em] sm:text-[44px]">{candidate.score}</div>
-          <div className="mt-1 text-xs text-muted">relative score</div>
-        </div>
+    <article className="panel fadein relative overflow-hidden" aria-labelledby="drug-h">
+      {/* header: who, for what, how strong */}
+      <header className="relative p-5 sm:p-8">
         <Link
           href={`/d/${encodeURIComponent(diseaseId)}`}
           scroll={false}
           aria-label="Close"
-          className="absolute right-3 top-3 grid h-11 w-11 place-items-center rounded-full text-muted hover:bg-soft-2 hover:text-foreground sm:right-5 sm:top-5"
+          className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full text-faint transition-colors hover:bg-sunken hover:text-foreground max-lg:hidden"
         >
           <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24">
             <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </Link>
+        <div className="flex items-start gap-5 lg:pr-10">
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] text-muted">
+              Could it help <span className="font-semibold text-disease">{disease.name}</span>?
+            </p>
+            <h2 id="drug-h" className="mt-1 break-words text-[clamp(30px,3.6vw,44px)] font-extrabold leading-[1.02] tracking-[-0.035em]">
+              {name}
+            </h2>
+            <div className="mt-3.5 flex flex-wrap items-center gap-1.5">
+              <ReadinessBadge value={candidate.readiness} />
+              <Fact>
+                {candidate.approved
+                  ? `Approved${candidate.year_approved ? ` in ${candidate.year_approved}` : ""}`
+                  : `Reached phase ${candidate.max_phase ?? "?"}`}
+              </Fact>
+              {candidate.black_box && <Fact tone="red">Black box warning</Fact>}
+              {candidate.trial_ids.map((t) => (
+                <a
+                  key={t}
+                  href={`https://clinicaltrials.gov/study/${t}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-line px-2.5 py-1 font-mono text-[11.5px] text-accent-ink hover:border-accent"
+                  title="Open the trial on ClinicalTrials.gov"
+                >
+                  {t}
+                </a>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col items-center">
+            <ScoreMeter score={candidate.score} size="lg" />
+            <span className="mt-1.5 text-[11.5px] text-faint" title="Relative rank within this list, not a probability">
+              out of 100
+            </span>
+          </div>
+        </div>
+      </header>
+
+      {/* the short version: the strongest path, drawn big */}
+      <section aria-label="Strongest reason" className="border-y border-line bg-field px-5 py-6 sm:px-8">
+        {paths.isLoading && <div className="skeleton h-[74px]" />}
+        {paths.data && lead && (
+          <div key={drugId}>
+            <Chain size="lg" {...toChain(lead, paths.data)} onNode={(n) => openGene(n.id)} />
+            <p className="mx-auto mt-4 max-w-[640px] text-center text-[15.5px] leading-relaxed text-muted">
+              {softenNames(lead.explanation, paths.data.nodes)}.
+            </p>
+          </div>
+        )}
+        {paths.data && !lead && <p className="text-center text-[15px] text-muted">No path returned for this pair.</p>}
+        {paths.isError && <p className="text-center text-[15px] text-muted">Could not load the path.</p>}
+      </section>
+
+      {/* tabs: three equal parts */}
+      <div className="px-5 pt-5 sm:px-8">
+        <div role="tablist" aria-label="Details" className="grid grid-cols-3 gap-1 rounded-[14px] bg-sunken p-1 text-[13.5px] font-semibold sm:text-[14px]">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={tab === t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex h-10 items-center justify-center gap-1.5 rounded-[11px] px-2 transition-colors ${
+                tab === t.key ? "bg-surface text-foreground shadow-soft" : "text-muted hover:text-foreground"
+              }`}
+            >
+              <span className="truncate">{t.label}</span>
+              {t.note && <span className="rounded-full bg-accent-soft px-1.5 text-[11.5px] tabular-nums text-accent-ink max-sm:hidden">{t.note}</span>}
+              {t.busy && <span aria-label="Loading" className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" />}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center gap-2 text-[13px] font-semibold">
-        <ReadinessBadge value={candidate.readiness} />
-        <span className="rounded-full bg-soft-2 px-3 py-1.5 text-muted">{candidate.approved ? "Approved drug" : `Not approved${candidate.max_phase != null ? ` · max phase ${candidate.max_phase}` : ""}`}</span>
-        {candidate.year_approved && <span className="rounded-full bg-soft-2 px-3 py-1.5 text-muted">since {candidate.year_approved}</span>}
-        {candidate.black_box && <span className="rounded-full bg-[#FBE4DE] px-3 py-1.5 text-[#8A2A14]">Black box warning</span>}
-        {candidate.trial_ids.map((t) => (
-          <a key={t} href={`https://clinicaltrials.gov/study/${t}`} target="_blank" rel="noreferrer" className="rounded-full bg-[#DFE9FA] px-3 py-1.5 font-mono text-[12px] text-[#1D4E99] hover:underline">
-            {t}
-          </a>
-        ))}
-      </div>
-
-      <ScoreBreakdown c={candidate} weights={weights} />
-
-      <div role="tablist" aria-label="Detail" className="mt-7 flex w-full gap-1 rounded-full bg-soft-2 p-1.5 text-sm font-bold sm:inline-flex sm:w-auto">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            role="tab"
-            aria-selected={tab === t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full px-4 transition-all sm:flex-none sm:px-5 ${
-              tab === t.key ? "bg-foreground text-background" : "text-muted hover:text-foreground"
-            }`}
-          >
-            {t.label}
-            {t.busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />}
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-6">
-        {tab === "path" &&
+      <div className="p-5 sm:p-8">
+        {tab === "why" &&
           (paths.isLoading ? (
-            <div className="skeleton h-[400px]" />
+            <div className="space-y-3">
+              <div className="skeleton h-28" />
+              <div className="skeleton h-28" />
+            </div>
           ) : paths.isError || !paths.data ? (
             <ErrorCard msg="Could not load the path." detail={(paths.error as Error)?.message} onRetry={() => paths.refetch()} />
           ) : (
-            <div className="space-y-7">
-              <PathGraph
-                data={paths.data}
-                drugId={drugId}
-                diseaseId={diseaseId}
-                highlight={highlight}
-                selectedGene={selectedGene?.id ?? null}
-                onGeneClick={(g) => {
-                  setGene(g);
-                  setTab("structure");
-                }}
-              />
-              {highlight && (
-                <button onClick={() => setHighlight(null)} className="min-h-11 text-sm font-bold text-accent-ink hover:underline">
-                  Clear highlight
-                </button>
-              )}
-              <div>
-                <h3 className="mb-3 text-[15px] font-bold">Why {name.toLowerCase()}</h3>
-                <ul className="space-y-3.5">
+            <div className="space-y-10">
+              <section aria-labelledby="reasons-h">
+                <Heading id="reasons-h" title={`${paths.data.paths.length} ${paths.data.paths.length === 1 ? "way" : "ways"} ${name} reaches ${disease.name}`}>
+                  Solid lines are recorded facts. Dashed lines are inferred from similarity. Click a gene to see its protein in 3D.
+                </Heading>
+                <ol className="space-y-3">
                   {paths.data.paths.map((p, i) => (
-                    <li key={i} className="flex gap-3 text-[16px] leading-relaxed">
-                      <span
-                        className="mt-2 h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={p.inferred ? { border: "2px dashed var(--drug)" } : { background: p.type === "sibling_disease" ? "var(--disease)" : "var(--gene)" }}
-                      />
-                      <span>
-                        <span className="font-semibold">{PATH_LABEL[p.type]}{p.inferred && " (inferred)"}:</span> {softenNames(p.explanation, paths.data.nodes)}.
-                      </span>
+                    <li key={i} className="rounded-2xl border border-line p-4">
+                      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                        <span className="text-[14px] font-bold">
+                          {PATH_LABEL[p.type]}
+                          {p.inferred && <span className="ml-1.5 font-semibold text-faint">inferred</span>}
+                        </span>
+                        <span className="text-[12.5px] text-muted">{PATH_HINT[p.type]}</span>
+                      </div>
+                      <Chain {...toChain(p, paths.data)} onNode={(n) => openGene(n.id)} selected={null} />
                     </li>
                   ))}
                   {paths.data.paths.length === 0 && <li className="text-[15px] text-muted">No paths returned.</li>}
-                </ul>
-              </div>
+                </ol>
+              </section>
+
+              <ScoreBreakdown c={candidate} weights={weights} />
+
+              <section aria-labelledby="map-h">
+                <Heading id="map-h" title="The whole map">
+                  Every path above drawn together. Drag to move around.
+                </Heading>
+                <PathGraph
+                  data={paths.data}
+                  drugId={drugId}
+                  diseaseId={diseaseId}
+                  highlight={highlight}
+                  selectedGene={selectedGene?.id ?? null}
+                  onGeneClick={openGene}
+                />
+                {highlight && (
+                  <button onClick={() => setHighlight(null)} className="mt-2 h-10 text-sm font-semibold text-accent-ink hover:underline">
+                    Clear highlight
+                  </button>
+                )}
+              </section>
+
               {analogs.length > 0 && <LookAlikeCompare key={drugId} drugId={drugId} drugName={name} analogs={analogs} />}
             </div>
           ))}
@@ -170,7 +248,7 @@ export default function DetailPanel({
           <StructurePanel drugId={drugId} diseaseId={diseaseId} gene={selectedGene} genes={genes} onGeneChange={setGene} />
         )}
 
-        {tab === "brief" && (
+        {tab === "evidence" && (
           <BriefView
             brief={brief.data}
             loading={brief.isLoading}
@@ -178,34 +256,66 @@ export default function DetailPanel({
             onRetry={() => brief.refetch()}
             onGraph={(id) => {
               setHighlight(id);
-              setTab("path");
+              setTab("why");
             }}
           />
         )}
       </div>
+    </article>
+  );
+}
+
+function Fact({ children, tone }: { children: React.ReactNode; tone?: "red" }) {
+  return (
+    <span
+      className={`rounded-full px-2.5 py-1 text-[12.5px] font-semibold ${
+        tone === "red" ? "bg-[#FBE3E0] text-[#8C2018]" : "bg-sunken text-muted"
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+export function Heading({ id, title, children }: { id?: string; title: string; children?: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <h3 id={id} className="text-[18px] font-bold tracking-[-0.015em]">
+        {title}
+      </h3>
+      {children && <p className="mt-1 text-[14px] leading-relaxed text-muted">{children}</p>}
     </div>
   );
 }
 
-/** Each component's share, honest about weights: a weight of 0 means "shown for context, not scored". */
+/** What drove the score. A weight of 0 means "shown for context, not scored". */
 function ScoreBreakdown({ c, weights }: { c: Candidate; weights?: Partial<Record<PathType, number>> }) {
   const parts = (Object.entries(c.score_components) as [PathType, number][]).filter(([, v]) => v > 0);
   if (!parts.length) return null;
   return (
-    <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-muted">
-      {parts.map(([k, v]) => {
-        const w = weights?.[k];
-        const unscored = w === 0;
-        return (
-          <span key={k} className="flex items-center gap-2" title={unscored ? "Weight 0: shown as context, does not change the ranking" : undefined}>
-            <span className="h-1.5 w-14 overflow-hidden rounded-full bg-soft">
-              <span className={`block h-full rounded-full ${unscored ? "bg-faint/50" : "bg-accent"}`} style={{ width: `${Math.round(v * 100)}%` }} />
-            </span>
-            {PATH_LABEL[k]} {v.toFixed(2)}
-            {unscored && <span className="text-faint">· context only</span>}
-          </span>
-        );
-      })}
-    </div>
+    <section aria-labelledby="score-h">
+      <Heading id="score-h" title={`Where the score of ${c.score} comes from`}>
+        How strongly each kind of path supports this drug, from 0 to 1.
+      </Heading>
+      <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+        {parts.map(([k, v]) => {
+          const unscored = weights?.[k] === 0;
+          return (
+            <div key={k} title={unscored ? "Weight 0: shown as context, does not change the ranking" : undefined}>
+              <div className="flex items-baseline justify-between text-[14px]">
+                <dt className="font-semibold">
+                  {PATH_LABEL[k]}
+                  {unscored && <span className="ml-1.5 font-normal text-faint">context only</span>}
+                </dt>
+                <dd className="tabular-nums text-muted">{v.toFixed(2)}</dd>
+              </div>
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-sunken">
+                <div className={`h-full rounded-full ${unscored ? "bg-faint/40" : "bg-accent"}`} style={{ width: `${Math.round(v * 100)}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </dl>
+    </section>
   );
 }

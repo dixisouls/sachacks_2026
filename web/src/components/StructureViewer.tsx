@@ -155,10 +155,10 @@ function MolCanvas({ files, setup, surface, resetSignal, className }: MolCanvasP
   }, []);
 
   return (
-    <div className={`relative overflow-hidden rounded-md border border-gray-200 bg-white ${className ?? ""}`}>
+    <div className={`relative overflow-hidden rounded-2xl border border-line bg-surface ${className ?? ""}`}>
       <div ref={host} className="absolute inset-0" />
       {status !== "ready" && (
-        <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500">
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-muted">
           {status === "loading" ? "Loading structure…" : "Could not load this structure file."}
         </div>
       )}
@@ -192,7 +192,7 @@ function Smiles2D({ smiles, className }: { smiles: string; className?: string })
   }, [smiles]);
 
   return failed ? (
-    <p className="text-sm text-gray-500">Could not draw this molecule.</p>
+    <p className="text-sm text-muted">Could not draw this molecule.</p>
   ) : (
     <svg ref={svg} className={className} role="img" aria-label="2D structure drawing" />
   );
@@ -202,7 +202,7 @@ function Smiles2D({ smiles, className }: { smiles: string; className?: string })
 
 function PlddtLegend() {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
       <span className="font-medium">pLDDT</span>
       {PLDDT_BINS.map((b) => (
         <span key={b.label} className="flex items-center gap-1">
@@ -228,8 +228,8 @@ function useIsNarrow(query = "(max-width: 639px)") {
 }
 
 const btn =
-  "rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 " +
-  "aria-pressed:bg-gray-800 aria-pressed:text-white";
+  "h-9 rounded-full border border-line bg-surface px-3.5 text-[13px] font-semibold text-foreground hover:border-foreground " +
+  "aria-pressed:border-foreground aria-pressed:bg-foreground aria-pressed:text-surface";
 
 // ── style setups per mode (§9.3) ─────────────────────────────────────────────
 
@@ -286,7 +286,7 @@ function LabelledPanel({ kind, name, detail, tone, children }: {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className={`rounded-full ${tone} px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white`}>
+        <span className={`rounded-full ${tone} px-2.5 py-0.5 text-[12px] font-semibold text-white`}>
           {kind}
         </span>
         <span className="truncate font-bold">{name}</span>
@@ -329,11 +329,11 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
   const bound = useCallback<Setup>((v, $, o) => boundSetup(compId)(v, $, o), [compId]);
 
   if (isPending) {
-    return <div className="h-80 animate-pulse rounded-md bg-gray-100" aria-label="Loading structure" />;
+    return <div className="skeleton h-80" aria-label="Loading structure" />;
   }
   if (isError || !plan) {
     return (
-      <div className="rounded-md border border-gray-200 p-4 text-sm text-gray-600">
+      <div className="rounded-2xl border border-line p-4 text-sm text-muted">
         Structure lookup failed.{" "}
         <button className="underline" onClick={() => refetch()}>Retry</button>
       </div>
@@ -366,11 +366,11 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
       className="h-80"
     />
   ) : drug.smiles ? (
-    <div className="flex h-80 items-center justify-center rounded-md border border-gray-200 bg-white">
+    <div className="flex h-80 items-center justify-center rounded-2xl border border-line bg-surface">
       <Smiles2D smiles={drug.smiles} className="h-60 w-80 max-w-full" />
     </div>
   ) : (
-    <div className="flex h-80 items-center justify-center rounded-md border border-gray-200 text-sm text-gray-500">
+    <div className="flex h-80 items-center justify-center rounded-2xl border border-line text-sm text-muted">
       No small-molecule structure for {drug.name}.
     </div>
   );
