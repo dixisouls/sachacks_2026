@@ -25,6 +25,7 @@ export default function Chain({
   size = "md",
   active = true,
   onNode,
+  canClick,
   selected,
 }: {
   nodes: ChainNode[];
@@ -33,6 +34,8 @@ export default function Chain({
   size?: "md" | "lg";
   active?: boolean;
   onNode?: (n: ChainNode) => void;
+  /** which gene nodes may be clicked; defaults to all of them */
+  canClick?: (n: ChainNode) => boolean;
   selected?: string | null;
 }) {
   const lg = size === "lg";
@@ -45,7 +48,7 @@ export default function Chain({
       aria-label={nodes.map((n) => n.label).join(", then ")}
     >
       {nodes.map((n, i) => {
-        const clickable = !!onNode && n.type === "gene";
+        const clickable = !!onNode && n.type === "gene" && (!canClick || canClick(n));
         const isSel = selected === n.id;
         const inner = (
           <>
@@ -73,7 +76,7 @@ export default function Chain({
                 <button
                   type="button"
                   onClick={() => onNode!(n)}
-                  title="Show this protein in 3D"
+                  title="See where the drug binds this protein"
                   className={`${nodeCls} w-full text-left transition-shadow hover:ring-2 hover:ring-gene/50`}
                 >
                   {inner}

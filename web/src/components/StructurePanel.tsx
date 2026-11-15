@@ -26,7 +26,7 @@ export default function StructurePanel({ drugId, gene, genes, onGeneChange }: Pr
     <div className="space-y-5">
       {genes.length > 0 && (
         <div>
-          <p className="mb-2 text-[14px] text-muted">Pick a protein from the path to see it with the drug.</p>
+          <p className="mb-2 text-[14px] text-muted">The proteins this drug acts on. Pick one to see where the drug binds.</p>
           <div role="group" aria-label="Proteins on the path" className="flex flex-wrap gap-1.5">
             {genes.map((g) => (
               <button
@@ -56,7 +56,7 @@ export default function StructurePanel({ drugId, gene, genes, onGeneChange }: Pr
             <p className="mt-4 font-bold">3D structure</p>
             <p className="mt-1 max-w-[360px] text-sm text-muted">
               {!gene ? (
-                "This path has no protein in it, so there is no structure to show."
+                "This drug has no direct protein target on these paths, so there is no structure to show."
               ) : (
                 <>
                   Shows <span className="font-mono">{gene.label}</span>
