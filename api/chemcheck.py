@@ -39,16 +39,25 @@ _FPGEN = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
 Status = Literal["pass", "warn", "fail"]
 
 
-def _catalog() -> FilterCatalog.FilterCatalog:
+def _catalog(which: str) -> FilterCatalog.FilterCatalog:
     params = FilterCatalog.FilterCatalogParams()
-    params.AddCatalog(FilterCatalog.FilterCatalogParams.FilterCatalogs.PAINS)
-    params.AddCatalog(FilterCatalog.FilterCatalogParams.FilterCatalogs.BRENK)
+    params.AddCatalog(getattr(FilterCatalog.FilterCatalogParams.FilterCatalogs, which))
     return FilterCatalog.FilterCatalog(params)
 
 
+# The two filters are kept apart because they carry very different weight.
+# PAINS flags groups that fake results in screening assays, which is close to
+# disqualifying. Brenk flags groups undesirable in a fragment screen, and is
+# conservative enough that marketed drugs trip it: cannabidiol hits it twice.
+# Treating both as fatal would reject the very drugs this product ranks.
 @lru_cache(maxsize=1)
-def _alert_catalog() -> FilterCatalog.FilterCatalog:
-    return _catalog()
+def _pains() -> FilterCatalog.FilterCatalog:
+    return _catalog("PAINS")
+
+
+@lru_cache(maxsize=1)
+def _brenk() -> FilterCatalog.FilterCatalog:
+    return _catalog("BRENK")
 
 
 @lru_cache(maxsize=1)
@@ -94,7 +103,8 @@ def _known_drugs() -> tuple[list[str], list[str], list[str], list[Any]]:
 def warm() -> None:
     """Build the caches now, so the first design run does not pay for them."""
     _known_drugs()
-    _alert_catalog()
+    _pains()
+    _brenk()
     _sa_scorer()
 
 
@@ -223,15 +233,24 @@ def evaluate(smiles: str, parent_smiles: str | None = None,
             problem="too hard to actually make",
         ))
 
-    hits = [entry.GetDescription() for entry in _alert_catalog().GetMatches(mol)]
+    pains = sorted({entry.GetDescription() for entry in _pains().GetMatches(mol)})
     checks.append(_check(
-        "alerts", "No known-problem groups", "pass" if not hits else "fail",
-        "clean" if not hits else f"{len(hits)} found",
-        "No PAINS or Brenk alerts: nothing here is a group notorious for faking results in "
-        "assays or for being toxic." if not hits else
-        "Contains " + ", ".join(sorted(set(hits))[:3]) + ". These groups commonly cause false "
-        "positives in screening or are known liabilities.",
-        problem="contains groups known to cause trouble",
+        "pains", "Will not fake a screening result", "pass" if not pains else "fail",
+        "clean" if not pains else f"{len(pains)} found",
+        "No PAINS alerts: nothing here is a group notorious for producing false hits in assays."
+        if not pains else "Contains " + ", ".join(pains[:3]) + ". Groups like this interfere with "
+        "assays and produce hits that evaporate on a closer look.",
+        problem="contains a group that fakes screening results",
+    ))
+
+    brenk = sorted({entry.GetDescription() for entry in _brenk().GetMatches(mol)})
+    checks.append(_check(
+        "brenk", "No awkward chemistry", "pass" if not brenk else "warn",
+        "clean" if not brenk else f"{len(brenk)} found",
+        "Nothing a medicinal chemist would object to on sight." if not brenk else
+        "Contains " + ", ".join(brenk[:3]) + ". Worth a second look, though plenty of approved "
+        "drugs carry groups like these.",
+        problem="has chemistry a medicinal chemist would question",
     ))
 
     # Novelty. Matching an existing drug is not a failure of chemistry, but it is

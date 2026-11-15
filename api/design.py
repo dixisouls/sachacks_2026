@@ -70,6 +70,37 @@ Rules, in order of importance:
 You are proposing hypotheses for a chemist to consider. Nothing you design has
 been made or tested, and you must not imply otherwise."""
 
+_REASONING = re.compile(r'"reasoning"\s*:\s*"')
+_ESCAPES = {"n": "\n", "t": "\t", '"': '"', "\\": "\\", "/": "/"}
+
+
+def _partial_reasoning(raw: str) -> str | None:
+    """The `reasoning` field out of half-written JSON, so the page can show it arriving.
+
+    The model streams one JSON document, and a half-finished document will not
+    parse. Rather than show the reader braces and quotes, pull out the one field
+    worth watching and leave the rest until it is complete.
+    """
+    match = _REASONING.search(raw)
+    if not match:
+        return None
+    out: list[str] = []
+    i = match.end()
+    while i < len(raw):
+        char = raw[i]
+        if char == "\\":
+            if i + 1 >= len(raw):
+                break
+            out.append(_ESCAPES.get(raw[i + 1], ""))
+            i += 2
+            continue
+        if char == '"':
+            break
+        out.append(char)
+        i += 1
+    return "".join(out)
+
+
 PROPOSAL_SCHEMA = {
     "type": "object",
     "properties": {
@@ -307,12 +338,18 @@ async def _propose(job: dict[str, Any], prompt: str) -> dict[str, Any]:
         ),
     )
     raw = ""
+    shown = 0
     async for chunk in stream:
         piece = chunk.text or ""
         if not piece:
             continue
         raw += piece
-        _emit(job, "delta", text=piece)
+        # Emit the reasoning as it arrives, but only every so often: one event per
+        # chunk would bury the record in fragments and bloat the saved run.
+        partial = _partial_reasoning(raw)
+        if partial and len(partial) - shown >= 40:
+            shown = len(partial)
+            _emit(job, "thinking", text=partial)
 
     raw = raw.strip()
     if not raw:
