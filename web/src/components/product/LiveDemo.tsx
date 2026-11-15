@@ -46,7 +46,7 @@ export default function LiveDemo() {
                 <span className="truncate text-[16px] font-bold">{drugLabel(c.drug_name, c.drug_id)}</span>
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   {c.top_gene_symbols.slice(0, 2).map((g) => (
-                    <span key={g} className="rounded-md bg-gene-soft px-1.5 font-mono text-[11.5px] font-medium text-[#0b5e55]">
+                    <span key={g} className="rounded-md bg-gene-soft px-1.5 font-mono text-[11.5px] font-medium text-accent-ink">
                       {g}
                     </span>
                   ))}

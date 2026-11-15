@@ -31,12 +31,12 @@ export default function BriefView({ brief, loading, error, onRetry, onGraph }: P
   return (
     <div className="space-y-8">
       {sample && (
-        <p className="rounded-2xl bg-drug-soft px-4 py-2.5 text-[13.5px] font-semibold text-[#8a3f0c]">
+        <p className="rounded-2xl bg-[#FBEFD9] px-4 py-2.5 text-[13.5px] font-semibold text-[#6B4A06]">
           Sample brief built from graph data only. Literature and safety evidence arrive with the live brief.
         </p>
       )}
 
-      <p className="flex items-start gap-3 rounded-2xl bg-gene-soft/60 px-4 py-3 text-[14px] leading-relaxed text-[#0b4e47]">
+      <p className="flex items-start gap-3 rounded-2xl bg-gene-soft/60 px-4 py-3 text-[14px] leading-relaxed text-accent-ink">
         <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" className="mt-0.5 shrink-0">
           <path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -124,12 +124,12 @@ function Section(props: { title: string; claims: Claim[]; byId: Map<string, Evid
 function Column({ tone, ...props }: { title: string; tone: "for" | "against"; claims: Claim[]; byId: Map<string, EvidenceItem>; onGraph: (id: string) => void; empty: string }) {
   const isFor = tone === "for";
   return (
-    <section className={`rounded-2xl border-t-4 bg-field p-4 ${isFor ? "border-[#1E8A55]" : "border-[#C8372D]"}`}>
+    <section className={`rounded-2xl border-t-4 bg-field p-4 ${isFor ? "border-accent" : "border-[#C8452A]"}`}>
       <h3 className="mb-3 flex items-center justify-between text-[16px] font-bold">
         {props.title}
         <span className="text-[13px] font-semibold tabular-nums text-faint">{props.claims.length}</span>
       </h3>
-      <Claims {...props} dot={isFor ? "bg-[#1E8A55]" : "bg-[#C8372D]"} />
+      <Claims {...props} dot={isFor ? "bg-accent" : "bg-[#C8452A]"} />
     </section>
   );
 }

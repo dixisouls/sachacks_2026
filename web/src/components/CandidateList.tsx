@@ -71,7 +71,7 @@ export default function CandidateList({
                     {c.top_gene_symbols.length > 0 ? (
                       <span className="flex min-w-0 items-center gap-1 overflow-hidden">
                         {c.top_gene_symbols.slice(0, 3).map((g) => (
-                          <span key={g} className="shrink-0 rounded-md bg-gene-soft px-1.5 font-mono text-[11.5px] font-medium text-[#0b5e55]">
+                          <span key={g} className="shrink-0 rounded-md bg-gene-soft px-1.5 font-mono text-[11.5px] font-medium text-accent-ink">
                             {g}
                           </span>
                         ))}

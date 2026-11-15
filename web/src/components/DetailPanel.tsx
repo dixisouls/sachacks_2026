@@ -269,7 +269,7 @@ function Fact({ children, tone }: { children: React.ReactNode; tone?: "red" }) {
   return (
     <span
       className={`rounded-full px-2.5 py-1 text-[12.5px] font-semibold ${
-        tone === "red" ? "bg-[#FBE3E0] text-[#8C2018]" : "bg-sunken text-muted"
+        tone === "red" ? "bg-[#FBE4DE] text-[#8A2A14]" : "bg-sunken text-muted"
       }`}
     >
       {children}

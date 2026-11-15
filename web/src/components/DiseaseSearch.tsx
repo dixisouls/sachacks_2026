@@ -123,7 +123,7 @@ export default function DiseaseSearch({
           role="listbox"
           className="fadein absolute z-40 mt-2 max-h-[420px] w-full overflow-auto rounded-[20px] border border-line bg-surface p-1.5 text-left shadow-float"
         >
-          {isError && <li className="px-4 py-3 text-sm text-[#8C2018]">Search is not reachable. Check that the backend is running.</li>}
+          {isError && <li className="px-4 py-3 text-sm text-[#8A2A14]">Search is not reachable. Check that the backend is running.</li>}
           {!isError && !isFetching && data.length === 0 && <li className="px-4 py-3 text-sm text-muted">No diseases match “{dq}”.</li>}
           {data.map((h, i) => {
             const thin = h.n_genes < THIN;
@@ -142,7 +142,7 @@ export default function DiseaseSearch({
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-disease" />
                 <span className={`min-w-0 flex-1 truncate font-semibold ${thin ? "text-muted" : ""}`}>{h.name}</span>
                 <span
-                  className={`shrink-0 text-right text-xs tabular-nums ${thin ? "rounded-full bg-drug-soft px-2 py-0.5 font-semibold text-[#8a3f0c]" : "text-faint"}`}
+                  className={`shrink-0 text-right text-xs tabular-nums ${thin ? "rounded-full bg-[#FBEFD9] px-2 py-0.5 font-semibold text-[#6B4A06]" : "text-faint"}`}
                   title={thin ? "Few known genes, so the ranking will be weak" : undefined}
                 >
                   {h.n_genes} {h.n_genes === 1 ? "gene" : "genes"}

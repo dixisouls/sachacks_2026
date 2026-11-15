@@ -57,7 +57,7 @@ export default function Results() {
                 />
               </div>
               {data.warning === "LOW_GRAPH_COVERAGE" && (
-                <p className="mt-5 max-w-[560px] rounded-2xl bg-drug-soft px-4 py-2.5 text-[14px] font-semibold text-[#8a3f0c]">
+                <p className="mt-5 max-w-[560px] rounded-2xl bg-[#FBEFD9] px-4 py-2.5 text-[14px] font-semibold text-[#6B4A06]">
                   Very few genes are known for this disease, so these results are weak. A broader parent disease will rank better.
                 </p>
               )}

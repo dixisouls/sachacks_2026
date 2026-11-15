@@ -38,7 +38,7 @@ export default function Header() {
           {USE_MOCKS && (
             <span
               title="No backend configured. Showing a saved snapshot of real results for the three example diseases."
-              className="rounded-full bg-drug-soft px-3 py-1 text-xs font-semibold text-[#8a3f0c]"
+              className="rounded-full bg-[#FBEFD9] px-3 py-1 text-xs font-semibold text-[#6B4A06]"
             >
               Offline snapshot
             </span>

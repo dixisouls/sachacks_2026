@@ -9,10 +9,10 @@ const NODES = {
   cbd: { x: 70, y: 190, r: 24, fill: "var(--drug)", label: "Cannabidiol", mono: false },
   rett: { x: 650, y: 190, r: 28, fill: "var(--disease)", label: "Rett syndrome", mono: false },
   cnr1: { x: 430, y: 80, r: 15, fill: "var(--gene)", label: "CNR1", mono: true },
-  nabi: { x: 230, y: 56, r: 13, fill: "#F0A46B", label: "Nabiximols", mono: false },
+  nabi: { x: 230, y: 56, r: 13, fill: "#E9967E", label: "Nabiximols", mono: false },
   htr2a: { x: 250, y: 270, r: 14, fill: "var(--gene)", label: "HTR2A", mono: true },
   htr2c: { x: 450, y: 290, r: 14, fill: "var(--gene)", label: "HTR2C", mono: true },
-  asd: { x: 360, y: 372, r: 14, fill: "#CF7FB6", label: "Autism spectrum disorder", mono: false },
+  asd: { x: 360, y: 372, r: 14, fill: "#9C8DEA", label: "Autism spectrum disorder", mono: false },
 } as const;
 type K = keyof typeof NODES;
 
