@@ -271,6 +271,32 @@ const plddtSetup: Setup = (viewer, $3Dmol, { surface }) => {
   fitWidth(viewer);
 };
 
+// ── panel heading ────────────────────────────────────────────────────────────
+// A protein and a small molecule are different kinds of object drawn at wildly
+// different scales. Without a heading on each, two panels side by side read as
+// "compare these two", which is what LookAlikeCompare means and this does not.
+
+function LabelledPanel({ kind, name, detail, tone, children }: {
+  kind: "Protein" | "Drug";
+  name: string;
+  detail: string;
+  tone: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className={`rounded-full ${tone} px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white`}>
+          {kind}
+        </span>
+        <span className="truncate font-bold">{name}</span>
+        <span className="text-xs text-muted">{detail}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 // ── main component ───────────────────────────────────────────────────────────
 
 export interface StructureViewerProps {
@@ -318,6 +344,19 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
   const hasProteinCanvas = (mode === "BOUND" || mode === "SEPARATE") && protein;
   const hasSurfaceToggle = Boolean(hasProteinCanvas);
 
+  // State what the panels are and how they relate, before anyone has to work it
+  // out from the pictures. Written per mode, because "drug inside the protein,
+  // measured" and "drug beside the protein, because nobody has measured them
+  // together" are different claims and the difference is the honest part.
+  const relationship =
+    mode === "BOUND"
+      ? `${drug.name} inside ${protein?.gene_symbol}, from an experimental structure`
+      : mode === "SEPARATE"
+        ? `${drug.name} acts on ${protein?.gene_symbol}. Shown apart because no experimental structure of the two together exists.`
+        : mode === "DRUG_ONLY"
+          ? `${drug.name} on its own. No protein structure available.`
+          : `${drug.name} on its own, drawn flat. No 3D structure available.`;
+
   const drugPanel = drug.file_url ? (
     <MolCanvas
       files={[{ url: drug.file_url, format: "sdf" }]}
@@ -337,7 +376,9 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
   );
 
   return (
-    <figure className="flex flex-col gap-2">
+    <figure className="flex flex-col gap-3">
+      <p className="text-sm text-muted">{relationship}</p>
+
       {/* controls */}
       <div className="flex flex-wrap items-center gap-2">
         {mode === "SEPARATE" && narrow && (
@@ -372,34 +413,50 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
       )}
 
       {mode === "SEPARATE" && protein && (
-        <div className="grid gap-2 sm:grid-cols-[2fr_1fr]">
+        <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
           {(!narrow || pane === "protein") && (
-            <MolCanvas
-              files={[{ url: protein.file_url, format: protein.format }]}
-              setup={plddtSetup}
-              surface={surface}
-              resetSignal={reset}
-              className="h-80"
-            />
+            <LabelledPanel
+              kind="Protein"
+              name={protein.gene_symbol}
+              detail={`human · UniProt ${protein.uniprot_id} · predicted by AlphaFold`}
+              tone="bg-gene"
+            >
+              <MolCanvas
+                files={[{ url: protein.file_url, format: protein.format }]}
+                setup={plddtSetup}
+                surface={surface}
+                resetSignal={reset}
+                className="h-80"
+              />
+            </LabelledPanel>
           )}
-          {(!narrow || pane === "drug") && drugPanel}
+          {(!narrow || pane === "drug") && (
+            <LabelledPanel
+              kind="Drug"
+              name={drug.name}
+              detail={drug.file_url ? "small molecule · 3D conformer" : "small molecule · 2D structure"}
+              tone="bg-drug"
+            >
+              {drugPanel}
+            </LabelledPanel>
+          )}
         </div>
       )}
 
-      {(mode === "DRUG_ONLY" || mode === "NONE") && drugPanel}
+      {(mode === "DRUG_ONLY" || mode === "NONE") && (
+        <LabelledPanel kind="Drug" name={drug.name} detail="small molecule" tone="bg-drug">
+          {drugPanel}
+        </LabelledPanel>
+      )}
 
       {/* legend + caption */}
       {mode === "SEPARATE" && <PlddtLegend />}
-      <figcaption className="text-xs text-gray-600">
+      <figcaption className="text-xs text-muted">
+        {/* Provenance only. What the panels are and how they relate is stated above. */}
         {plan.caption}
         {mode === "BOUND" && plan.ligand_match === "stereo_relaxed" && (
-          <span className="block text-gray-500">
+          <span className="block">
             PDB ligand {plan.ligand_comp_id} matches {drug.name}&apos;s structure; stereochemistry not compared.
-          </span>
-        )}
-        {mode === "SEPARATE" && (
-          <span className="block text-gray-500">
-            Drug shown separately. No docking or predicted binding pose.
           </span>
         )}
       </figcaption>
