@@ -65,6 +65,55 @@ const PLDDT_BINS = [
 const plddtColor = (atom: { b?: number }) =>
   PLDDT_BINS.find((bin) => (atom.b ?? 0) > bin.min)!.color;
 
+// ── binding sites ────────────────────────────────────────────────────────────
+
+/** One amino acid of the binding site, e.g. { name: "Trp", num: 65 }. */
+export interface SiteResidue {
+  name: string;
+  num: number;
+  chain?: string;
+  note?: string;
+}
+
+const residueLabel = (r: SiteResidue) => `${r.name}${r.num}`;
+const titleResidue = (resn: string) => resn.charAt(0) + resn.slice(1).toLowerCase();
+
+/** Known binding and active sites for a protein, from UniProt. Positions match AlphaFold numbering. */
+async function fetchUniprotSites(acc: string): Promise<{ num: number; note: string }[]> {
+  const r = await fetch(`https://rest.uniprot.org/uniprotkb/${encodeURIComponent(acc)}?fields=ft_binding,ft_act_site&format=json`);
+  if (!r.ok) throw new Error(`uniprot ${r.status}`);
+  const j = (await r.json()) as {
+    features?: { type: string; location: { start: { value: number }; end: { value: number } }; ligand?: { name?: string }; description?: string }[];
+  };
+  const out = new Map<number, string>();
+  for (const f of j.features ?? []) {
+    const note = f.type === "Active site" ? "active site" : f.ligand?.name ? `binds ${f.ligand.name}` : "binding site";
+    for (let n = f.location.start.value; n <= f.location.end.value && n - f.location.start.value < 30; n++) {
+      if (!out.has(n)) out.set(n, note);
+    }
+  }
+  return [...out.entries()].sort(([a], [b]) => a - b).map(([num, note]) => ({ num, note }));
+}
+
+/** Put a small name tag on each residue's alpha carbon. */
+function labelResidues(viewer: GLViewer, sel: Record<string, unknown>, max = 24) {
+  const seen = new Set<string>();
+  for (const a of viewer.selectedAtoms({ ...sel, atom: "CA" }) as { resn?: string; resi?: number; chain?: string; x: number; y: number; z: number }[]) {
+    const key = `${a.chain}${a.resi}`;
+    if (seen.has(key) || seen.size >= max) continue;
+    seen.add(key);
+    viewer.addLabel(`${titleResidue(a.resn ?? "")}${a.resi}`, {
+      position: { x: a.x, y: a.y, z: a.z },
+      fontSize: 11,
+      fontColor: "#0a5a4e",
+      backgroundColor: "#ffffff",
+      backgroundOpacity: 0.85,
+      borderThickness: 0,
+      inFront: true,
+    });
+  }
+}
+
 // ── one 3Dmol canvas ─────────────────────────────────────────────────────────
 
 type Setup = (viewer: GLViewer, $3Dmol: typeof import("3dmol"), opts: { surface: boolean }) => void;
@@ -131,6 +180,7 @@ function MolCanvas({ files, setup, surface, resetSignal, className }: MolCanvasP
     const $3Dmol = libRef.current;
     if (status !== "ready" || !viewer || !$3Dmol) return;
     viewer.removeAllSurfaces();
+    viewer.removeAllLabels();
     viewer.setStyle({}, {});
     setup(viewer, $3Dmol, { surface });
     if (!homeView.current) homeView.current = viewer.getView();
@@ -246,7 +296,7 @@ const drugSticks: Setup = (viewer) => {
   fitWidth(viewer);
 };
 
-function boundSetup(compId: string): Setup {
+function boundSetup(compId: string, report?: (r: SiteResidue[]) => void, labels = true): Setup {
   return (viewer, $3Dmol, { surface }) => {
     // One copy of the ligand (entries can hold several, one per chain).
     const first = viewer.selectedAtoms({ resn: compId })[0];
@@ -254,7 +304,17 @@ function boundSetup(compId: string): Setup {
     const pocket = { within: { distance: 5, sel: ligand }, byres: true, hetflag: false };
 
     viewer.setStyle({ hetflag: false }, { cartoon: { color: "lightgrey" } });
-    viewer.addStyle(pocket, { stick: { colorscheme: "lightgreyCarbon", radius: 0.15 } });
+    // the amino acids touching the drug: this is where it acts
+    viewer.addStyle(pocket, { stick: { colorscheme: "cyanCarbon", radius: 0.18 } });
+    if (labels) labelResidues(viewer, pocket);
+    if (report) {
+      const seen = new Map<string, SiteResidue>();
+      for (const a of viewer.selectedAtoms(pocket) as { resn?: string; resi?: number; chain?: string }[]) {
+        const k = `${a.chain}${a.resi}`;
+        if (a.resi != null && !seen.has(k)) seen.set(k, { name: titleResidue(a.resn ?? ""), num: a.resi, chain: a.chain });
+      }
+      report([...seen.values()].sort((x, y) => x.num - y.num));
+    }
     viewer.setStyle(ligand, { stick: { colorscheme: "greenCarbon", radius: 0.25 } });
     if (surface) viewer.addSurface($3Dmol.SurfaceType.VDW, { opacity: 0.35, color: "white" }, pocket);
     // Frame the pocket, not just the ligand, so surrounding helices don't fill the view.
@@ -262,7 +322,19 @@ function boundSetup(compId: string): Setup {
   };
 }
 
-const plddtSetup: Setup = (viewer, $3Dmol, { surface }) => {
+function plddtSetup(sites: number[], labels = true): Setup {
+  return (viewer, $3Dmol, o) => {
+    basePlddt(viewer, $3Dmol, o);
+    if (!sites.length) return;
+    // known binding sites of this protein (UniProt), drawn as sticks over the fold
+    const sel = { resi: sites };
+    viewer.addStyle(sel, { stick: { colorscheme: "magentaCarbon", radius: 0.22 } });
+    if (labels) labelResidues(viewer, sel, 16);
+    viewer.zoomTo({ within: { distance: 10, sel }, byres: true });
+  };
+}
+
+const basePlddt: Setup = (viewer, $3Dmol, { surface }) => {
   viewer.setStyle({}, { cartoon: { colorfunc: plddtColor } });
   if (surface) viewer.addSurface($3Dmol.SurfaceType.VDW, { opacity: 0.4, color: "white" });
   // Frame the confident core; long disordered tails (pLDDT < 70) otherwise shrink the fold.
@@ -297,6 +369,24 @@ function LabelledPanel({ kind, name, detail, tone, children }: {
   );
 }
 
+function SiteList({ title, note, items, tone }: { title: string; note: string; items: { label: string; title?: string }[]; tone: "teal" | "pink" }) {
+  const chip = tone === "teal" ? "bg-mint text-accent-ink" : "bg-[#F6DDF0] text-[#7A1F63]";
+  return (
+    <div className="rounded-3xl bg-soft-2 px-4 py-3.5">
+      <p className="text-[14px] font-bold">{title}</p>
+      <p className="mt-0.5 text-[12.5px] text-muted">{note}</p>
+      <div className="mt-2.5 flex flex-wrap gap-1">
+        {items.slice(0, 40).map((it) => (
+          <span key={it.label} title={it.title} className={`rounded-md px-1.5 py-0.5 font-mono text-[11.5px] font-medium ${chip}`}>
+            {it.label}
+          </span>
+        ))}
+        {items.length > 40 && <span className="text-[12px] text-muted">and {items.length - 40} more</span>}
+      </div>
+    </div>
+  );
+}
+
 // ── main component ───────────────────────────────────────────────────────────
 
 export interface StructureViewerProps {
@@ -313,6 +403,18 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
   });
 
   const [surface, setSurface] = useState(true);
+  const [labels, setLabels] = useState(true);
+  const [pocket, setPocket] = useState<SiteResidue[]>([]);
+  const acc = plan?.mode === "SEPARATE" ? plan.protein?.uniprot_id : undefined;
+  const sites = useQuery({
+    queryKey: ["uniprot-sites", acc],
+    queryFn: () => fetchUniprotSites(acc!),
+    enabled: Boolean(acc),
+    staleTime: Infinity,
+    retry: 0,
+  });
+  const siteNums = (sites.data ?? []).map((s) => s.num);
+  const siteKey = siteNums.join(",");
   const [reset, setReset] = useState(0);
   const [pane, setPane] = useState<"protein" | "drug">("protein");
   const narrow = useIsNarrow();
@@ -326,7 +428,11 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
 
   // Stable setup callbacks so MolCanvas only restyles when inputs change.
   const compId = plan?.ligand_comp_id ?? "";
-  const bound = useCallback<Setup>((v, $, o) => boundSetup(compId)(v, $, o), [compId]);
+  const bound = useCallback<Setup>((v, $, o) => boundSetup(compId, setPocket, labels)(v, $, o), [compId, labels]);
+  const predicted = useCallback<Setup>(
+    (v, $, o) => plddtSetup(siteKey ? siteKey.split(",").map(Number) : [], labels)(v, $, o),
+    [siteKey, labels],
+  );
 
   if (isPending) {
     return <div className="skeleton h-80" aria-label="Loading structure" />;
@@ -350,9 +456,9 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
   // together" are different claims and the difference is the honest part.
   const relationship =
     mode === "BOUND"
-      ? `${drug.name} inside ${protein?.gene_symbol}, from an experimental structure`
+      ? `Measured: ${drug.name} bound inside ${protein?.gene_symbol}. The highlighted amino acids touch the drug, so this is where it acts.`
       : mode === "SEPARATE"
-        ? `${drug.name} acts on ${protein?.gene_symbol}. Shown apart because no experimental structure of the two together exists.`
+        ? `${drug.name} acts on ${protein?.gene_symbol}, but nobody has measured the two together, so the exact spot is unknown. Shown apart; the pink sticks are ${protein?.gene_symbol}'s known binding sites from UniProt, not necessarily where ${drug.name} binds.`
         : mode === "DRUG_ONLY"
           ? `${drug.name} on its own. No protein structure available.`
           : `${drug.name} on its own, drawn flat. No 3D structure available.`;
@@ -399,6 +505,11 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
             Surface
           </button>
         )}
+        {hasProteinCanvas && (
+          <button className={btn} aria-pressed={labels} onClick={() => setLabels((s) => !s)}>
+            Labels
+          </button>
+        )}
       </div>
 
       {/* viewers */}
@@ -423,7 +534,7 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
             >
               <MolCanvas
                 files={[{ url: protein.file_url, format: protein.format }]}
-                setup={plddtSetup}
+                setup={predicted}
                 surface={surface}
                 resetSignal={reset}
                 className="h-80"
@@ -447,6 +558,34 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
         <LabelledPanel kind="Drug" name={drug.name} detail="small molecule" tone="bg-drug">
           {drugPanel}
         </LabelledPanel>
+      )}
+
+      {/* where it acts, in words */}
+      {mode === "BOUND" && pocket.length > 0 && (
+        <SiteList
+          title={`Where ${drug.name} binds on ${protein?.gene_symbol}`}
+          note={`${pocket.length} amino acids within 5 Å of the drug, from the measured structure.`}
+          items={pocket.map((r) => ({ label: residueLabel(r) }))}
+          tone="teal"
+        />
+      )}
+      {mode === "SEPARATE" && (
+        sites.isLoading ? (
+          <div className="skeleton h-16" />
+        ) : sites.data && sites.data.length > 0 ? (
+          <SiteList
+            title={`Known binding sites on ${protein?.gene_symbol}`}
+            note="From UniProt. These are where ligands of this protein are known to bind, not a measurement of this drug."
+            items={sites.data.map((s) => ({ label: `#${s.num}`, title: s.note }))}
+            tone="pink"
+          />
+        ) : (
+          <p className="rounded-3xl bg-soft-2 px-4 py-3 text-[13.5px] text-muted">
+            {sites.isError
+              ? "Could not reach UniProt for known binding sites."
+              : `UniProt lists no binding sites for ${protein?.gene_symbol}, so there is nothing to highlight.`}
+          </p>
+        )
       )}
 
       {/* legend + caption */}
