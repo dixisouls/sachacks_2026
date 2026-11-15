@@ -137,11 +137,11 @@ export default function PathGraph({ data, drugId, diseaseId, highlight, selected
             target: e.target,
             label:
               e.relation === "ASSOCIATED_WITH" && e.weight != null
-                ? `associated · ${e.weight.toFixed(2)}`
+                ? `linked, ${e.weight.toFixed(2)}`
                 : e.relation === "SIMILAR_STRUCTURE" && e.weight != null
-                  ? `${Math.round(e.weight * 100)}% similar structure`
+                  ? `${Math.round(e.weight * 100)}% same shape`
                   : e.relation === "SIMILAR_SEQUENCE" && e.weight != null
-                    ? `${Math.round(e.weight * 100)}% identical sequence`
+                    ? `${Math.round(e.weight * 100)}% same sequence`
                     : e.relation.toLowerCase().replace(/_/g, " "),
             width: e.relation === "ASSOCIATED_WITH" && e.weight != null ? 2 + 5 * (e.weight / maxW) : 2.5,
             bend: i % 2 ? 28 : -28,
@@ -189,7 +189,7 @@ export default function PathGraph({ data, drugId, diseaseId, highlight, selected
           { selector: "node[type='disease']", style: { "background-color": cssVar("--disease") } },
           { selector: "node[main=1]", style: { width: 46, height: 46, "font-weight": 800, "font-size": vertical ? 17 : 15 } },
           { selector: "node[type='gene']", style: { "font-family": mono + ", monospace", "font-weight": 500 } },
-          { selector: "node.selected-gene", style: { "border-color": cssVar("--mint"), "border-width": 7 } },
+          { selector: "node.selected-gene", style: { "border-color": cssVar("--gene-soft"), "border-width": 7 } },
           {
             selector: "edge",
             style: {
@@ -264,18 +264,21 @@ export default function PathGraph({ data, drugId, diseaseId, highlight, selected
 
   return (
     <div>
-      <div className="relative rounded-[28px] bg-field">
+      <div
+        className="relative overflow-hidden rounded-3xl bg-soft-2"
+        style={{ backgroundImage: "radial-gradient(var(--soft) 1px, transparent 1px)", backgroundSize: "18px 18px" }}
+      >
         <div ref={ref} className="w-full" style={{ height }} />
         <button
           onClick={() => cyRef.current?.fit(undefined, 40)}
-          className="absolute right-3 top-3 min-h-9 rounded-full bg-surface px-3 text-xs font-bold text-muted shadow-soft hover:text-foreground"
+          className="absolute right-3 top-3 h-8 rounded-full bg-surface px-3 text-xs shadow-soft font-semibold text-muted hover:text-foreground"
         >
           Re-center
         </button>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 px-1 text-[13px] text-muted">
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 px-1 text-[13px] text-muted">
         <Legend color="var(--drug)" label="Drug" />
-        <Legend color="var(--gene)" label="Gene · click for structure" />
+        <Legend color="var(--gene)" label="Gene (click for 3D)" />
         <Legend color="var(--disease)" label="Disease" />
         <span className="flex items-center gap-2">
           <svg width="24" height="6" aria-hidden="true">

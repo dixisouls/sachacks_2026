@@ -7,6 +7,8 @@ import type {
   Brief,
   Comparison,
   CandidatesResponse,
+  DesignJob,
+  DesignStart,
   DiseaseHit,
   DiseaseSummary,
   EvalResult,
@@ -102,4 +104,21 @@ export function getComparison(drugId: string, otherDrugId: string): Promise<Comp
 export function getEval(): Promise<EvalResult> {
   if (USE_MOCKS) return mock.mockEval();
   return request(`/api/eval`);
+}
+
+/** Start designing a molecule from `drugId`. Returns at once; the run continues on the server. */
+export function startDesign(drugId: string, diseaseId: string, force = false): Promise<DesignStart> {
+  const q = new URLSearchParams({ drug_id: drugId, disease_id: diseaseId, force: String(force) });
+  return request<DesignStart>(`/api/design?${q}`, { method: "POST" });
+}
+
+/** The whole job so far. Used on reconnect, and as the fallback when the stream drops. */
+export function getDesign(jobId: string): Promise<DesignJob> {
+  return request<DesignJob>(`/api/design/${encodeURIComponent(jobId)}`);
+}
+
+/** Where the live event stream lives. Empty when there is no backend to stream from. */
+export function designStreamUrl(jobId: string, since: number): string {
+  if (!BASE) return "";
+  return `${BASE}/api/design/${encodeURIComponent(jobId)}/stream?since=${since}`;
 }

@@ -2,10 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import Blobs from "@/components/Blobs";
 import ErrorCard from "@/components/ErrorCard";
 import Footer from "@/components/Footer";
-import { CountUp, Reveal } from "@/components/product/Reveal";
 import { getEval } from "@/lib/api";
 import type { EvalMetrics } from "@/lib/types";
 
@@ -34,14 +32,10 @@ export default function Validation() {
   const [hover, setHover] = useState<{ m: string; label: string; color: string; v: number; se?: number; x: number; y: number } | null>(null);
 
   return (
-    <div className="relative isolate overflow-hidden">
-      <Blobs variant="mint" />
-      <div className="mx-auto max-w-[1000px] px-4 pb-16 pt-8 sm:px-8">
-        <p className="text-[15px] font-semibold text-accent-ink">Validation</p>
-        <h1 className="mt-3 text-[clamp(38px,5vw,60px)] font-extrabold leading-[1.02] tracking-[-0.04em]">
-          Hide what we know.
-          <br />
-          See if it comes back.
+    <div>
+      <div className="mx-auto max-w-[1000px] px-4 pt-14 sm:px-8 sm:pt-20">
+        <h1 className="text-center text-[clamp(40px,6vw,72px)] font-extrabold leading-[0.98] tracking-[-0.05em]">
+          Does it work?
         </h1>
 
         {q.isLoading && <div className="skeleton mt-10 h-80" />}
@@ -63,7 +57,7 @@ export default function Validation() {
 
           return (
             <>
-              <p className="mt-6 max-w-[680px] text-lg leading-relaxed text-muted">
+              <p className="mx-auto mt-6 max-w-[640px] text-center text-[17px] leading-relaxed text-muted">
                 We hid {Math.round((e.holdout_fraction ?? 0.2) * 100)}% of known approved treatments
                 {hidden ? ` (${hidden.toLocaleString()} drug–disease pairs)` : ""} and asked the system to rank them back.
                 Weights were tuned on one split{e.tuning ? ` (seed ${e.tuning.split_seed})` : ""} and reported on another
@@ -71,17 +65,17 @@ export default function Validation() {
               </p>
 
               {ours && (
-                <Reveal className="mt-12 flex flex-wrap gap-x-16 gap-y-8">
-                  <Stat value={<CountUp to={ours["hits@10"] * 100} decimals={1} suffix="%" />} label="of hidden treatments return in the top 10" accent />
-                  {pop && <Stat value={<CountUp to={ours["hits@10"] / pop["hits@10"]} decimals={1} suffix="×" />} label="the popularity baseline" />}
-                  {rnd && <Stat value={<CountUp to={Math.round(ours["hits@10"] / rnd["hits@10"])} suffix="×" />} label="the random baseline" />}
-                  <Stat value={<span>{ours.median_rank}</span>} label="median rank of a hidden treatment" />
-                </Reveal>
+                <div className="mt-12 grid grid-cols-2 rounded-[32px] bg-surface shadow-float md:grid-cols-4">
+                  <Stat value={`${(ours["hits@10"] * 100).toFixed(1)}%`} label="of hidden treatments come back in the top 10" accent />
+                  {pop && <Stat value={`${(ours["hits@10"] / pop["hits@10"]).toFixed(1)}×`} label="better than ranking by popularity" />}
+                  {rnd && <Stat value={`${Math.round(ours["hits@10"] / rnd["hits@10"])}×`} label="better than picking at random" />}
+                  <Stat value={String(ours.median_rank)} label="median rank of a hidden treatment" />
+                </div>
               )}
 
-              <Reveal delay={100} className="mt-14 rounded-[36px] bg-surface p-6 shadow-float sm:p-10">
+              <div className="panel mt-8 p-5 sm:p-10">
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-                  <h2 className="text-lg font-extrabold tracking-tight">Every method, same held-out pairs</h2>
+                  <h2 className="text-[18px] font-bold tracking-[-0.015em]">Every method, tested on the same hidden pairs</h2>
                   <div className="flex items-center gap-4 text-[13px] text-muted" aria-label="Legend">
                     {SERIES.map((s) => (
                       <span key={s.key} className="flex items-center gap-1.5">
@@ -90,13 +84,13 @@ export default function Validation() {
                       </span>
                     ))}
                   </div>
-                  <div className="ml-auto inline-flex gap-1 rounded-full bg-soft-2 p-1 text-[13px] font-bold">
+                  <div className="ml-auto inline-flex gap-1 rounded-full bg-soft p-1 text-[13px] font-semibold">
                     {(["chart", "table"] as const).map((v) => (
                       <button
                         key={v}
                         onClick={() => setView(v)}
                         aria-pressed={view === v}
-                        className={`min-h-9 rounded-full px-4 capitalize ${view === v ? "bg-foreground text-background" : "text-muted"}`}
+                        className={`h-8 rounded-full px-4 capitalize ${view === v ? "bg-surface text-foreground shadow-soft" : "text-muted"}`}
                       >
                         {v}
                       </button>
@@ -189,9 +183,9 @@ export default function Validation() {
                     </table>
                   </div>
                 )}
-              </Reveal>
+              </div>
 
-              <Reveal delay={150} className="mt-14 grid gap-8 sm:grid-cols-2">
+              <div className="mt-8 grid gap-4 sm:grid-cols-2">
                 <Note title="The two graph paths find different things">
                   Together they beat either one alone. Shared biology and sibling diseases each recover treatments the other misses.
                 </Note>
@@ -206,9 +200,9 @@ export default function Validation() {
                   </Note>
                 )}
                 <Note title="Scores rank, they do not predict">
-                  A score of 90 means “near the top of this list”, not a 90% chance of working.
+                  A score of 90 means near the top of this list. It does not mean a 90% chance of working.
                 </Note>
-              </Reveal>
+              </div>
             </>
           );
         })()}
@@ -223,23 +217,20 @@ function order(m: string) {
   return i < 0 ? 99 : i;
 }
 
-function Stat({ value, label, accent = false }: { value: React.ReactNode; label: string; accent?: boolean }) {
+function Stat({ value, label, accent = false }: { value: string; label: string; accent?: boolean }) {
   return (
-    <div>
-      <div className={`text-[56px] font-extrabold leading-none tracking-tight ${accent ? "text-accent-ink" : ""}`}>{value}</div>
-      <p className="mt-2 max-w-[200px] text-[15px] text-muted">{label}</p>
+    <div className="flex flex-col items-center px-4 py-8 text-center">
+      <div className={`text-[clamp(36px,4.6vw,52px)] font-extrabold leading-none tabular-nums tracking-[-0.045em] ${accent ? "text-accent" : ""}`}>{value}</div>
+      <p className="mt-2.5 max-w-[180px] text-[14px] leading-snug text-muted">{label}</p>
     </div>
   );
 }
 
 function Note({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="flex gap-4">
-      <span className="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-accent" />
-      <div>
-        <h3 className="font-extrabold tracking-tight">{title}</h3>
-        <p className="mt-1.5 text-[15px] leading-relaxed text-muted">{children}</p>
-      </div>
+    <div className="rounded-[28px] bg-surface p-6 shadow-soft">
+      <h3 className="text-[17px] font-bold tracking-[-0.015em]">{title}</h3>
+      <p className="mt-2 text-[15px] leading-relaxed text-muted">{children}</p>
     </div>
   );
 }

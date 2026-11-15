@@ -63,21 +63,22 @@ export default function DiseaseSearch({
   return (
     <div ref={boxRef} className="relative w-full">
       <label htmlFor={inputId} className="sr-only">
-        Disease
+        Disease name
       </label>
       <div
-        className={`flex items-center gap-3 rounded-full bg-surface shadow-soft transition-shadow focus-within:ring-4 focus-within:ring-accent/20 ${
-          compact ? "py-1 pl-5 pr-2" : "py-2 pl-7 pr-2"
+        className={`flex items-center gap-3 bg-surface transition-shadow focus-within:ring-4 focus-within:ring-accent/20 ${
+          compact ? "h-11 rounded-full pl-4 pr-2 shadow-soft" : "h-[68px] rounded-full pl-7 pr-2.5 shadow-float"
         }`}
       >
-        <svg aria-hidden="true" width={compact ? 18 : 20} height={compact ? 18 : 20} viewBox="0 0 24 24" className="shrink-0 text-muted">
-          <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
-          <path d="M16.5 16.5 L21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <svg aria-hidden="true" width={compact ? 17 : 22} height={compact ? 17 : 22} viewBox="0 0 24 24" className="shrink-0 text-faint">
+          <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2.2" />
+          <path d="M16.5 16.5 L21 21" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
         </svg>
         <input
           id={inputId}
           autoFocus={autoFocus}
           value={q}
+          autoComplete="off"
           onChange={(e) => {
             setQ(e.target.value);
             setOpen(true);
@@ -96,22 +97,22 @@ export default function DiseaseSearch({
               pick(data[active]);
             } else if (e.key === "Escape") setOpen(false);
           }}
-          placeholder="Try “Rett syndrome”"
-          className={`min-w-0 flex-1 bg-transparent outline-none placeholder:text-faint ${compact ? "py-2.5 text-[15px]" : "py-3.5 text-lg"}`}
+          placeholder={compact ? "Search another disease" : "Type a disease, like Rett syndrome"}
+          className={`h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-faint ${compact ? "text-[14px]" : "text-[19px]"}`}
           role="combobox"
           aria-expanded={showList}
           aria-controls={listId}
           aria-autocomplete="list"
         />
-        {isFetching && <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-soft border-t-accent" />}
+        {isFetching && <span aria-label="Searching" className="mr-1 h-4 w-4 animate-spin rounded-full border-2 border-sunken border-t-accent" />}
         {!compact && (
           <button
             type="button"
             onClick={() => data[active] && pick(data[active])}
             disabled={!data.length}
-            className="min-h-12 shrink-0 rounded-full bg-accent px-6 font-bold text-white transition-colors hover:bg-accent-ink disabled:opacity-60"
+            className="h-12 shrink-0 rounded-full bg-accent px-6 text-[15px] font-semibold text-surface transition-colors hover:bg-accent-ink disabled:bg-faint/60 max-sm:px-4"
           >
-            Find candidates
+            Find drugs
           </button>
         )}
       </div>
@@ -120,9 +121,9 @@ export default function DiseaseSearch({
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-40 mt-3 max-h-96 w-full overflow-auto rounded-[28px] bg-surface p-2 shadow-float [animation:fadein_.2s_ease]"
+          className="fadein absolute z-40 mt-2 max-h-[420px] w-full overflow-auto rounded-[28px] bg-surface p-2 text-left shadow-float"
         >
-          {isError && <li className="px-4 py-3 text-sm text-[#8A2A14]">Search failed. Is the backend running?</li>}
+          {isError && <li className="px-4 py-3 text-sm text-[#8A2A14]">Search is not reachable. Check that the backend is running.</li>}
           {!isError && !isFetching && data.length === 0 && <li className="px-4 py-3 text-sm text-muted">No diseases match “{dq}”.</li>}
           {data.map((h, i) => {
             const thin = h.n_genes < THIN;
@@ -136,17 +137,16 @@ export default function DiseaseSearch({
                   e.preventDefault();
                   pick(h);
                 }}
-                className={`flex cursor-pointer items-center gap-3 rounded-[20px] px-4 py-2.5 ${i === active ? "bg-soft-2" : ""} ${
-                  thin ? "opacity-60" : ""
-                }`}
+                className={`flex cursor-pointer items-center gap-3 rounded-[20px] px-4 py-2.5 ${i === active ? "bg-soft-2" : ""}`}
               >
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-disease" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-semibold">{h.name}</div>
-                  <div className="truncate font-mono text-xs text-muted">{h.disease_id}</div>
-                </div>
-                <span className="text-right text-xs tabular-nums text-muted" title={thin ? "Few known gene associations; results will be weak" : undefined}>
-                  {h.n_genes} genes{thin && " · thin"}
+                <span className={`min-w-0 flex-1 truncate font-semibold ${thin ? "text-muted" : ""}`}>{h.name}</span>
+                <span
+                  className={`shrink-0 text-right text-xs tabular-nums ${thin ? "rounded-full bg-[#FBEFD9] px-2 py-0.5 font-semibold text-[#6B4A06]" : "text-faint"}`}
+                  title={thin ? "Few known genes, so the ranking will be weak" : undefined}
+                >
+                  {h.n_genes} {h.n_genes === 1 ? "gene" : "genes"}
+                  {thin && ", weak data"}
                 </span>
               </li>
             );

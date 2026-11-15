@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
-/* Flow theme: soft, organic, no boxes. */
+/*
+  Flow theme: soft, organic, mostly borderless. Every screen still reads left
+  to right: drug → gene → disease, and those three colours mean only that.
+*/
 :root {
   --background: #f1f4f2;
   --surface: #ffffff;
@@ -14,30 +17,45 @@
   --accent: #0b7a69;
   --accent-ink: #0a5a4e;
   --drug: #d9573a;
-  --drug-soft: #e9967e;
   --gene: #0b7a69;
   --disease: #6a55d8;
   --mint: #dcebe5;
   --lilac: #e6e1f7;
   --peach: #f7e3da;
   --shadow: 16, 35, 30;
+
+  /* newer token names, mapped onto the same palette */
+  --sunken: var(--soft);
+  --line: var(--border);
+  --line-strong: #c8d4ce;
+  --accent-soft: #dcefe8;
+  --drug-soft: var(--peach); /* the original #e9967e lives on as a node fill */
+  --gene-soft: var(--mint);
+  --disease-soft: var(--lilac);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-drug: var(--drug);
+  --color-drug-soft: var(--drug-soft);
+  --color-gene: var(--gene);
+  --color-gene-soft: var(--gene-soft);
+  --color-disease: var(--disease);
+  --color-disease-soft: var(--disease-soft);
   --color-soft: var(--soft);
   --color-soft-2: var(--soft-2);
   --color-field: var(--field);
   --color-border: var(--border);
-  --color-accent: var(--accent);
-  --color-accent-ink: var(--accent-ink);
-  --color-drug: var(--drug);
-  --color-gene: var(--gene);
-  --color-disease: var(--disease);
   --color-mint: var(--mint);
   --color-lilac: var(--lilac);
   --color-peach: var(--peach);
@@ -45,11 +63,36 @@
   --font-mono: var(--font-jetbrains);
 }
 
+html {
+  scroll-behavior: smooth;
+}
 body {
   background: var(--background);
   color: var(--foreground);
 }
 
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+/*
+  Keyboard focus ring. Layered as base so utilities such as `outline-none`
+  (the search input, whose wrapper draws its own ring) still win over it.
+*/
+@layer base {
+  :focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+/* one panel elevation for the whole app */
+.panel {
+  background: var(--surface);
+  border-radius: 32px;
+  box-shadow: 0 1px 2px rgba(var(--shadow), 0.05), 0 40px 80px -40px rgba(var(--shadow), 0.35);
+}
 .shadow-float {
   box-shadow: 0 1px 2px rgba(var(--shadow), 0.05), 0 40px 80px -40px rgba(var(--shadow), 0.35);
 }
@@ -75,43 +118,42 @@ body {
 .draw {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation: draw 1.4s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+  animation: draw 1.1s cubic-bezier(0.65, 0, 0.35, 1) forwards;
 }
 
-@keyframes float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(0, -10px) scale(1.02); }
+@keyframes pop {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: none; }
 }
-.float-slow { animation: float 9s ease-in-out infinite; }
-
-@keyframes pulse-ring {
-  0% { transform: scale(1); opacity: 0.5; }
-  100% { transform: scale(1.9); opacity: 0; }
-}
-.pulse-ring {
+.pop {
   transform-box: fill-box;
   transform-origin: center;
-  animation: pulse-ring 2.4s ease-out infinite;
+  animation: pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
 }
 
-/* scroll reveal, toggled by <Reveal> */
-.reveal {
-  opacity: 0;
-  transform: translateY(24px);
-  transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
-}
-.reveal.in {
-  opacity: 1;
-  transform: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .draw { animation: none; stroke-dashoffset: 0; }
-  .float-slow, .pulse-ring { animation: none; }
-  .reveal { opacity: 1; transform: none; transition: none; }
+@keyframes grow {
+  from { transform: scaleX(0); }
+  to { transform: none; }
 }
 
 @keyframes fadein {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
+}
+.fadein {
+  animation: fadein 0.35s ease both;
+}
+
+/* reveal kept as a no-op for any leftover usage */
+.reveal { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .draw { animation: none; stroke-dashoffset: 0; }
+  .pop, .fadein, .skeleton { animation: none; }
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+  }
 }

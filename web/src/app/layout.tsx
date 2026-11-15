@@ -9,8 +9,7 @@ const mono = JetBrains_Mono({ variable: "--font-jetbrains", subsets: ["latin"] }
 
 export const metadata: Metadata = {
   title: "RepurposeKG",
-  description:
-    "Name a disease. Get approved drugs that might treat it, each with the biological path behind it.",
+  description: "Name a disease. Get approved drugs that might treat it, each with the biological path behind it.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

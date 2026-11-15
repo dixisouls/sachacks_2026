@@ -16,11 +16,11 @@ export default function BriefView({ brief, loading, error, onRetry, onGraph }: P
   if (loading) return <BriefSkeleton />;
   if (error || !brief) {
     return (
-      <div className="rounded-[28px] bg-field p-8 text-center">
-        <p className="font-bold">Evidence sources unavailable</p>
-        <p className="mt-1 text-sm text-muted">The path still works. You can try the brief again.</p>
-        <button onClick={onRetry} className="mt-4 min-h-11 rounded-full bg-foreground px-5 text-sm font-bold text-background">
-          Retry
+      <div className="rounded-3xl bg-soft-2 p-8 text-center">
+        <p className="font-bold">Evidence sources are not reachable right now</p>
+        <p className="mt-1 text-sm text-muted">The reasons and the map still work. You can load the evidence again.</p>
+        <button onClick={onRetry} className="mt-4 h-10 rounded-full bg-accent px-5 text-sm font-semibold text-white hover:bg-accent-ink">
+          Load evidence again
         </button>
       </div>
     );
@@ -31,28 +31,49 @@ export default function BriefView({ brief, loading, error, onRetry, onGraph }: P
   return (
     <div className="space-y-8">
       {sample && (
-        <p className="rounded-full bg-[#FBEFD9] px-4 py-2 text-[13px] font-semibold text-[#6B4A06]">
-          Sample brief from graph data only. Literature and safety evidence arrive with the brief endpoint.
+        <p className="rounded-full bg-[#FBEFD9] px-4 py-2.5 text-[13.5px] font-semibold text-[#6B4A06]">
+          Sample brief built from graph data only. Literature and safety evidence arrive with the live brief.
         </p>
       )}
-      <Section title="Mechanism" claims={brief.mechanism} byId={byId} onGraph={onGraph} empty="No supported mechanism." />
-      <Section title="Evidence for" claims={brief.evidence_for} byId={byId} onGraph={onGraph} empty="No supporting evidence found yet." />
-      <Section title="Evidence against" claims={brief.evidence_against} byId={byId} onGraph={onGraph} empty="No contrary evidence found yet." />
-      <div>
-        <h3 className="mb-3 text-[15px] font-bold">Readiness</h3>
+
+      <p className="flex items-start gap-3 rounded-3xl bg-accent-soft/70 px-4 py-3 text-[14px] leading-relaxed text-accent-ink">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" className="mt-0.5 shrink-0">
+          <path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span>
+          Every sentence below links to its source: a paper, a trial, a safety report or a graph edge.
+          {brief.dropped_claims > 0 && (
+            <>
+              {" "}
+              {brief.dropped_claims} {brief.dropped_claims === 1 ? "sentence had" : "sentences had"} no source and {brief.dropped_claims === 1 ? "was" : "were"}{" "}
+              removed.
+            </>
+          )}
+        </span>
+      </p>
+
+      <Section title="How it might work" claims={brief.mechanism} byId={byId} onGraph={onGraph} empty="No supported mechanism found." />
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Column title="Evidence for" tone="for" claims={brief.evidence_for} byId={byId} onGraph={onGraph} empty="No supporting evidence found yet." />
+        <Column title="Evidence against" tone="against" claims={brief.evidence_against} byId={byId} onGraph={onGraph} empty="No contrary evidence found yet." />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-3xl bg-soft-2 px-4 py-3">
+        <span className="text-[14px] font-bold">Readiness</span>
         <ReadinessBadge value={brief.readiness} />
-        <p className="mt-2 text-[13px] text-muted">Computed from the graph and trial registry, never by the language model.</p>
+        <span className="text-[13px] text-muted">Worked out from the graph and trial registry, never by the language model.</span>
       </div>
 
       {brief.evidence.length > 0 && (
-        <details className="group rounded-[24px] bg-field">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-5 py-3 text-[15px] font-bold">
-            Sources ({brief.evidence.length})
+        <details className="group rounded-3xl bg-soft-2">
+          <summary className="flex h-12 cursor-pointer list-none items-center justify-between px-4 text-[14px] font-bold">
+            All {brief.evidence.length} sources
             <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" className="transition-transform group-open:rotate-180">
               <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </summary>
-          <ul className="space-y-2 px-5 pb-4 text-sm">
+          <ul className="space-y-2.5 px-4 pb-4 pt-1 text-sm">
             {brief.evidence.map((e) => (
               <li key={e.id} className="flex items-start gap-3">
                 <CitationChip id={e.id} item={e} onGraph={onGraph} />
@@ -63,53 +84,70 @@ export default function BriefView({ brief, loading, error, onRetry, onGraph }: P
         </details>
       )}
 
-      <p className="text-xs text-muted">
-        {brief.dropped_claims > 0 && `${brief.dropped_claims} unsupported claim${brief.dropped_claims === 1 ? "" : "s"} removed · `}
-        Generated {new Date(brief.generated_at).toLocaleString()} · {brief.model}
+      <p className="text-center text-xs text-faint">
+        Written {new Date(brief.generated_at).toLocaleString()} by {brief.model}
       </p>
     </div>
   );
 }
 
-function Section({ title, claims, byId, onGraph, empty }: { title: string; claims: Claim[]; byId: Map<string, EvidenceItem>; onGraph: (id: string) => void; empty: string }) {
+function Claims({ claims, byId, onGraph, empty, dot }: { claims: Claim[]; byId: Map<string, EvidenceItem>; onGraph: (id: string) => void; empty: string; dot: string }) {
+  if (claims.length === 0) return <p className="text-[14.5px] text-muted">{empty}</p>;
   return (
-    <div>
-      <h3 className="mb-3 text-[15px] font-bold">{title}</h3>
-      {claims.length === 0 ? (
-        <p className="text-[15px] text-muted">{empty}</p>
-      ) : (
-        <ul className="space-y-3">
-          {claims.map((c, i) => (
-            <li key={i} className="flex gap-3 text-[16px] leading-relaxed">
-              <span className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-gene" />
-              <span>
-                {c.text}{" "}
-                <span className="inline-flex flex-wrap gap-1">
-                  {c.source_ids.map((s) => (
-                    <CitationChip key={s} id={s} item={byId.get(s)} onGraph={onGraph} />
-                  ))}
-                </span>
+    <ul className="space-y-3">
+      {claims.map((c, i) => (
+        <li key={i} className="flex gap-3 text-[15.5px] leading-relaxed">
+          <span className={`mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
+          <span>
+            {c.text}{" "}
+            {c.source_ids.map((s) => (
+              <span key={s} className="mr-1 inline-block">
+                <CitationChip id={s} item={byId.get(s)} onGraph={onGraph} />
               </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+            ))}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Section(props: { title: string; claims: Claim[]; byId: Map<string, EvidenceItem>; onGraph: (id: string) => void; empty: string }) {
+  return (
+    <section>
+      <h3 className="mb-3 text-[18px] font-bold tracking-[-0.015em]">{props.title}</h3>
+      <Claims {...props} dot="bg-gene" />
+    </section>
+  );
+}
+
+function Column({ tone, ...props }: { title: string; tone: "for" | "against"; claims: Claim[]; byId: Map<string, EvidenceItem>; onGraph: (id: string) => void; empty: string }) {
+  const isFor = tone === "for";
+  return (
+    <section className="rounded-3xl bg-soft-2 p-4 sm:p-5">
+      <h3 className="mb-3 flex items-center gap-2 text-[16px] font-bold">
+        <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${isFor ? "bg-accent" : "bg-[#C8452A]"}`} />
+        <span className="flex-1">{props.title}</span>
+        <span className="text-[13px] font-semibold tabular-nums text-faint">{props.claims.length}</span>
+      </h3>
+      <Claims {...props} dot={isFor ? "bg-accent" : "bg-[#C8452A]"} />
+    </section>
   );
 }
 
 function BriefSkeleton() {
   return (
     <div className="space-y-6" aria-busy="true" aria-label="Gathering evidence">
-      <p className="text-sm text-muted">Gathering evidence…</p>
-      {[3, 2, 2].map((n, s) => (
-        <div key={s} className="space-y-2.5">
-          <div className="skeleton h-3.5 w-28" />
-          {Array.from({ length: n }).map((_, i) => (
-            <div key={i} className="skeleton h-4" style={{ width: `${92 - i * 14}%` }} />
-          ))}
-        </div>
-      ))}
+      <p className="text-center text-sm text-muted">Reading papers, trials and safety reports. This takes a few seconds.</p>
+      <div className="space-y-2.5">
+        <div className="skeleton h-4 w-40" />
+        <div className="skeleton h-4 w-[92%]" />
+        <div className="skeleton h-4 w-[78%]" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="skeleton h-40" />
+        <div className="skeleton h-40" />
+      </div>
     </div>
   );
 }

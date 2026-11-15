@@ -1,57 +1,65 @@
 import type { PathNode, PathType, Readiness } from "./types";
 
-/** Readiness: a dot color + a soft pill, always paired with a text label. */
+/** Readiness: a colour + a plain label + one sentence. Colour is never the only signal. */
 export const READINESS: Record<Readiness, { label: string; dot: string; pill: string; hint: string }> = {
   APPROVED_UNTESTED: {
-    label: "Untested",
+    label: "Untested here",
     dot: "#0B7A69",
     pill: "bg-[#DCEFE8] text-[#0A5A4E]",
-    hint: "Approved drug with no trial or known use for this disease family",
+    hint: "Approved drug that nobody has tried for this disease yet. The most novel kind of lead.",
   },
   IN_TRIALS: {
     label: "In trials",
     dot: "#2C6FD1",
     pill: "bg-[#DFE9FA] text-[#1D4E99]",
-    hint: "Already tested in a clinical trial for this disease family",
+    hint: "Someone is already testing it in a clinical trial for this disease family.",
   },
   OFF_LABEL: {
-    label: "Off-label",
+    label: "Used off-label",
     dot: "#6A55D8",
     pill: "bg-[#E6E1F7] text-[#45369A]",
-    hint: "Already used off label for this disease family",
+    hint: "Doctors already use it off-label for this disease family.",
   },
   SAFETY_CONCERN: {
     label: "Safety concern",
     dot: "#C8452A",
     pill: "bg-[#FBE4DE] text-[#8A2A14]",
-    hint: "Contraindication for this disease family, or a black box warning",
+    hint: "Has a contraindication for this disease family, or a black box warning.",
   },
   INVESTIGATIONAL: {
-    label: "Investigational",
+    label: "Not approved",
     dot: "#6F807A",
     pill: "bg-[#E8EDEA] text-[#3E524B]",
-    hint: "Not approved; see max phase for how far it got",
+    hint: "Never approved anywhere. Max phase shows how far it got.",
   },
   WITHDRAWN: {
     label: "Withdrawn",
     dot: "#8A2A14",
     pill: "bg-[#F3D3CB] text-[#6E1D0C]",
-    hint: "Withdrawn from the market",
+    hint: "Was approved, then withdrawn from the market.",
   },
 };
 
 export const PATH_LABEL: Record<PathType, string> = {
   shared_biology: "Shared biology",
   sibling_disease: "Sibling disease",
-  chemical_analog: "Look-alike",
-  protein_homolog: "Homolog",
+  chemical_analog: "Look-alike drug",
+  protein_homolog: "Related protein",
+};
+
+/** One plain sentence per path type, for people who do not know the jargon. */
+export const PATH_HINT: Record<PathType, string> = {
+  shared_biology: "The drug acts on a gene that is linked to the disease.",
+  sibling_disease: "The drug already treats a closely related disease.",
+  chemical_analog: "A drug with almost the same structure reaches the disease.",
+  protein_homolog: "The drug acts on a protein very similar to one linked to the disease.",
 };
 
 export const PATH_SHORT: Record<PathType, string> = {
   shared_biology: "gene",
   sibling_disease: "sibling",
   chemical_analog: "look-alike",
-  protein_homolog: "homolog",
+  protein_homolog: "related protein",
 };
 
 export function citationUrl(id: string): string | null {
