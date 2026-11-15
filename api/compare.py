@@ -27,7 +27,9 @@ import polars as pl
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from rdkit import DataStructs, RDLogger
-from rdkit.Chem import Mol, MolFromSmarts, MolFromSmiles, rdFingerprintGenerator, rdFMCS
+from rdkit.Chem import (AllChem, Mol, MolFromSmarts, MolFromSmiles, MolToMolBlock,
+                        RemoveHs, rdFingerprintGenerator, rdFMCS, rdMolAlign)
+from rdkit.Chem import AddHs
 from rdkit.Chem.Draw import rdMolDraw2D
 
 RDLogger.DisableLog("rdApp.*")
@@ -39,6 +41,8 @@ ARTIFACTS = Path(os.environ.get("ARTIFACT_DIR", ROOT / "artifacts"))
 WIDTH, HEIGHT = 340, 260
 MCS_TIMEOUT = 5
 HIGHLIGHT = (0.13, 0.63, 0.52)  # teal, readable on light and dark backgrounds
+N_CONFORMERS = 30   # candidates generated for the probe; the best-overlaying one is kept
+EMBED_SEED = 42     # fixed, so the same pair always renders identically
 
 _plain = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
 _stereo = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048, includeChirality=True)
@@ -140,6 +144,100 @@ def build_comparison(drug_id: str, other_drug_id: str) -> Comparison:
     )
 
 
+# ── 3D overlay ───────────────────────────────────────────────────────────────
+
+class Overlay3D(BaseModel):
+    left: str = Field(description="MDL molblock, the reference conformer")
+    right: str = Field(description="MDL molblock, aligned onto the reference's shared core")
+    left_name: str
+    right_name: str
+    left_shared_atoms: list[int] = Field(description="0-based atom indices of the shared core")
+    right_shared_atoms: list[int]
+    core_rmsd_A: float = Field(description="how closely the shared cores superimpose")
+    shared_atoms: int
+    conformers_tried: int
+    is_computed: bool = Field(
+        True, description="always true: generated conformers, not experimental structures")
+    caption: str
+
+
+def _conformer(smiles: str) -> Mol:
+    mol = AddHs(MolFromSmiles(smiles))
+    params = AllChem.ETKDGv3()
+    params.randomSeed = EMBED_SEED
+    if AllChem.EmbedMolecule(mol, params) != 0:
+        raise ValueError("could not generate a 3D conformer")
+    AllChem.MMFFOptimizeMolecule(mol, maxIters=400)
+    return RemoveHs(mol)
+
+
+def _best_overlay(smiles: str, reference: Mol, pattern: Mol) -> tuple[Mol, float, int]:
+    """Generate several conformers and keep the one whose shared core best matches.
+
+    A single conformer lands wherever the embedding happens to put the flexible
+    parts, which can look like a poor match when the molecules are in fact close:
+    fostamatinib against R-406 goes from 1.75 A with one conformer to 0.10 A here.
+    """
+    mol = AddHs(MolFromSmiles(smiles))
+    params = AllChem.ETKDGv3()
+    params.randomSeed = EMBED_SEED
+    params.pruneRmsThresh = 0.5
+    if not AllChem.EmbedMultipleConfs(mol, numConfs=N_CONFORMERS, params=params):
+        raise ValueError("could not generate 3D conformers")
+    AllChem.MMFFOptimizeMoleculeConfs(mol, maxIters=300)
+    mol = RemoveHs(mol)
+
+    atom_map = list(zip(mol.GetSubstructMatch(pattern), reference.GetSubstructMatch(pattern)))
+    if not atom_map:
+        raise ValueError("shared scaffold did not match in 3D")
+    tried = mol.GetNumConformers()
+    rmsd, best_id = min((rdMolAlign.AlignMol(mol, reference, prbCid=c, atomMap=atom_map), c)
+                        for c in range(tried))
+
+    single = Mol(mol)
+    single.RemoveAllConformers()
+    single.AddConformer(mol.GetConformer(best_id), assignId=True)
+    return single, rmsd, tried
+
+
+@lru_cache(maxsize=256)
+def build_overlay(drug_id: str, other_drug_id: str) -> Overlay3D:
+    drugs = _drugs()
+    left, right = drugs.get(drug_id), drugs.get(other_drug_id)
+    if left is None:
+        raise KeyError(f"unknown drug_id {drug_id}")
+    if right is None:
+        raise KeyError(f"unknown drug_id {other_drug_id}")
+    if not left["smiles"] or not right["smiles"]:
+        missing = left["name"] if not left["smiles"] else right["name"]
+        raise ValueError(f"no chemical structure recorded for {missing}")
+
+    flat_left, flat_right = MolFromSmiles(left["smiles"]), MolFromSmiles(right["smiles"])
+    mcs = rdFMCS.FindMCS([flat_left, flat_right], timeout=MCS_TIMEOUT,
+                         ringMatchesRingOnly=True, completeRingsOnly=True)
+    pattern = MolFromSmarts(mcs.smartsString) if mcs.smartsString else None
+    if pattern is None:
+        raise ValueError("the two molecules share no common scaffold to align on")
+
+    reference = _conformer(left["smiles"])
+    probe, rmsd, tried = _best_overlay(right["smiles"], reference, pattern)
+    shared_left = list(reference.GetSubstructMatch(pattern))
+    shared_right = list(probe.GetSubstructMatch(pattern))
+
+    return Overlay3D(
+        left=MolToMolBlock(reference), right=MolToMolBlock(probe),
+        left_name=left["name"] or drug_id, right_name=right["name"] or other_drug_id,
+        left_shared_atoms=shared_left, right_shared_atoms=shared_right,
+        core_rmsd_A=round(rmsd, 3), shared_atoms=len(shared_left), conformers_tried=tried,
+        # Say what this is. Computed conformers are not experimental structures, and an
+        # overlay of two drugs is not a binding pose -- that claim belongs only to a
+        # co-crystal, which /api/structures reports separately.
+        caption=(f"Computed 3D conformers aligned on the shared scaffold "
+                 f"({len(shared_left)} atoms, core RMSD {rmsd:.2f} Å). "
+                 f"Predicted shapes, not experimental structures, and not a binding pose."),
+    )
+
+
 router = APIRouter(prefix="/api/compare", tags=["compare"])
 
 
@@ -150,6 +248,24 @@ def compare_drugs(
 ) -> Comparison:
     try:
         return build_comparison(drug_id, other_drug_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc).strip("'"))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+
+
+@router.get("/3d", response_model=Overlay3D)
+def compare_drugs_3d(
+    drug_id: str = Query(description="the candidate, e.g. CHEMBL2103830"),
+    other_drug_id: str = Query(description="its look-alike, e.g. CHEMBL475251"),
+) -> Overlay3D:
+    """Both molecules as 3D molblocks, superimposed on their shared scaffold.
+
+    Feed `left` and `right` straight to 3Dmol as `mol` format and colour the
+    shared atom indices to make the common core read at a glance.
+    """
+    try:
+        return build_overlay(drug_id, other_drug_id)
     except KeyError as exc:
         raise HTTPException(404, str(exc).strip("'"))
     except ValueError as exc:
