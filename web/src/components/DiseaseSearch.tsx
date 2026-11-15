@@ -66,8 +66,8 @@ export default function DiseaseSearch({
         Disease name
       </label>
       <div
-        className={`flex items-center gap-3 border border-line bg-surface transition-[box-shadow,border-color] focus-within:border-accent focus-within:ring-4 focus-within:ring-accent/15 ${
-          compact ? "h-11 rounded-full pl-4 pr-2" : "h-[68px] rounded-[22px] pl-6 pr-2.5 shadow-float"
+        className={`flex items-center gap-3 bg-surface transition-shadow focus-within:ring-4 focus-within:ring-accent/20 ${
+          compact ? "h-11 rounded-full pl-4 pr-2 shadow-soft" : "h-[68px] rounded-full pl-7 pr-2.5 shadow-float"
         }`}
       >
         <svg aria-hidden="true" width={compact ? 17 : 22} height={compact ? 17 : 22} viewBox="0 0 24 24" className="shrink-0 text-faint">
@@ -110,7 +110,7 @@ export default function DiseaseSearch({
             type="button"
             onClick={() => data[active] && pick(data[active])}
             disabled={!data.length}
-            className="h-12 shrink-0 rounded-[15px] bg-foreground px-5 text-[15px] font-semibold text-surface transition-colors hover:bg-accent-ink disabled:bg-faint/60 max-sm:px-4"
+            className="h-12 shrink-0 rounded-full bg-accent px-6 text-[15px] font-semibold text-surface transition-colors hover:bg-accent-ink disabled:bg-faint/60 max-sm:px-4"
           >
             Find drugs
           </button>
@@ -121,7 +121,7 @@ export default function DiseaseSearch({
         <ul
           id={listId}
           role="listbox"
-          className="fadein absolute z-40 mt-2 max-h-[420px] w-full overflow-auto rounded-[20px] border border-line bg-surface p-1.5 text-left shadow-float"
+          className="fadein absolute z-40 mt-2 max-h-[420px] w-full overflow-auto rounded-[28px] bg-surface p-2 text-left shadow-float"
         >
           {isError && <li className="px-4 py-3 text-sm text-[#8A2A14]">Search is not reachable. Check that the backend is running.</li>}
           {!isError && !isFetching && data.length === 0 && <li className="px-4 py-3 text-sm text-muted">No diseases match “{dq}”.</li>}
@@ -137,7 +137,7 @@ export default function DiseaseSearch({
                   e.preventDefault();
                   pick(h);
                 }}
-                className={`flex cursor-pointer items-center gap-3 rounded-[14px] px-3.5 py-2.5 ${i === active ? "bg-sunken" : ""}`}
+                className={`flex cursor-pointer items-center gap-3 rounded-[20px] px-4 py-2.5 ${i === active ? "bg-soft-2" : ""}`}
               >
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-disease" />
                 <span className={`min-w-0 flex-1 truncate font-semibold ${thin ? "text-muted" : ""}`}>{h.name}</span>
