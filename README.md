@@ -19,7 +19,7 @@ cd sachacks_2026
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-uvicorn api.main:app --reload --port 8000
+python -m uvicorn api.main:app --reload --port 8000
 ```
 
 **Windows (PowerShell)**
@@ -30,10 +30,12 @@ cd sachacks_2026
 py -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn api.main:app --reload --port 8000
+python -m uvicorn api.main:app --reload --port 8000
 ```
 
-Open **http://localhost:8000/docs** for clickable API docs. Startup takes about 2 seconds, and requests answer in 2 to 4 ms.
+Open **http://localhost:8000** and you land on the clickable API docs. Startup takes about 2 seconds, and requests answer in 2 to 4 ms.
+
+> Use `python -m uvicorn`, not bare `uvicorn`. If a system-wide uvicorn was on your PATH before you made the venv, your shell may keep using it and fail with `ModuleNotFoundError: No module named 'polars'`. Running it through `python` always picks the venv.
 
 Try it without the server:
 
