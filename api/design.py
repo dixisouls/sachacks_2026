@@ -29,7 +29,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from api import cache, chemcheck, config
+from api import cache, chemcheck, config, pocket as pocket_mod
 
 log = logging.getLogger("repurposekg.design")
 router = APIRouter(prefix="/api/design", tags=["design"])
@@ -144,7 +144,7 @@ _lock = asyncio.Lock()
 
 
 def _job_key(drug_id: str, disease_id: str) -> str:
-    return f"{drug_id}|{disease_id}|{config.GEMINI_MODEL}|v1"
+    return f"{drug_id}|{disease_id}|{config.GEMINI_MODEL}|v2"
 
 
 def _emit(job: dict[str, Any], kind: str, **payload: Any) -> None:
@@ -237,7 +237,7 @@ async def stream(job_id: str, request: Request, since: int = 0) -> StreamingResp
 def _public(job: dict[str, Any]) -> dict[str, Any]:
     return {k: job[k] for k in
             ("job_id", "status", "drug_id", "disease_id", "events", "attempts", "best",
-             "parent", "random_pass_rate", "error", "cached")
+             "parent", "pocket", "random_pass_rate", "error", "cached")
             if k in job}
 
 
@@ -271,7 +271,7 @@ def build_context(drug_id: str, disease_id: str) -> dict[str, Any]:
     row = next((c for c in result["approved"] + result["investigational"]
                 if c["drug_id"] == drug_id), None)
 
-    targets = [{"symbol": n["label"], "uniprot": n.get("uniprot_id")}
+    targets = [{"symbol": n["label"], "uniprot": n.get("uniprot_id"), "gene_id": n["id"]}
                for n in paths["nodes"] if n["type"] == "gene"]
     direct = {e["target"] if e["source"] == drug_id else e["source"]
               for e in paths["edges"] if drug_id in (e["source"], e["target"])}
@@ -324,6 +324,43 @@ def build_context(drug_id: str, disease_id: str) -> dict[str, Any]:
 
 # ── the run ──────────────────────────────────────────────────────────────────
 
+async def _load_pocket(drug_id: str, targets: list[dict[str, Any]],
+                       drug_smiles: str) -> tuple[pocket_mod.Pocket | None, str | None]:
+    """The crystal structure of this drug inside one of its targets, if one exists.
+
+    Only a BOUND plan carries a measured position. A predicted protein tells us
+    the shape of the protein but nothing about where the drug goes, so there is
+    nothing to place against and the check reports that rather than guessing.
+    """
+    from api.structures import build_structure_plan, fetch_structure_file
+
+    tried = []
+    for target in targets:
+        gene_id = target.get("gene_id")
+        if not gene_id:
+            continue
+        try:
+            plan = await build_structure_plan(drug_id, gene_id)
+        except Exception as exc:  # a structure lookup must not end the run
+            log.info("structure lookup failed for %s/%s: %s", drug_id, gene_id, exc)
+            continue
+        if plan.mode != "BOUND" or not plan.protein or not plan.ligand_comp_id:
+            tried.append(f"{target['symbol']} has no structure with the drug bound")
+            continue
+        try:
+            raw, _ = await fetch_structure_file("rcsb", plan.protein.id)
+            return await asyncio.to_thread(
+                pocket_mod.read_pocket, raw.decode("utf-8", "replace"), plan.ligand_comp_id,
+                drug_smiles, plan.protein.id, plan.resolution_A), None
+        except Exception as exc:
+            log.info("could not read pocket %s: %s", plan.protein.id, exc)
+            tried.append(f"{plan.protein.id} could not be read")
+    note = ("No experimental structure of this drug inside a target protein"
+            + (f" ({'; '.join(tried)})" if tried else "")
+            + ", so nothing here tests whether a molecule fits the target.")
+    return None, note
+
+
 async def _propose(job: dict[str, Any], prompt: str) -> dict[str, Any]:
     """One model call, streamed so the page has something to show while it thinks."""
     from google import genai
@@ -370,10 +407,18 @@ async def _propose(job: dict[str, Any], prompt: str) -> dict[str, Any]:
 
 
 def _rank_key(attempt: dict[str, Any]) -> tuple:
-    """Best first: accepted over flagged, then drug-like, then easy to make."""
-    rank = {"pass": 0, "warn": 1, "fail": 2}[attempt["check"]["status"]]
-    props = attempt["check"].get("properties", {})
-    return (rank, -(props.get("qed") or 0), props.get("sa_score") or 10)
+    """Best first.
+
+    Fitting the pocket comes before everything else. It is the only check that
+    knows which protein the molecule is aimed at, and ranking on drug-likeness
+    alone put a molecule with six atoms inside the protein at the top.
+    """
+    check = attempt["check"]
+    rank = {"pass": 0, "warn": 1, "fail": 2}[check["status"]]
+    fit = next((c for c in check["checks"] if c["id"] == "pocket"), None)
+    fit_rank = {"pass": 0, "warn": 1, "fail": 2}.get(fit["status"], 1) if fit else 1
+    props = check.get("properties", {})
+    return (fit_rank, rank, -(props.get("qed") or 0), props.get("sa_score") or 10)
 
 
 async def _run(job_id: str) -> None:
@@ -399,6 +444,23 @@ async def _run(job_id: str) -> None:
                    f"and {len(context['targets'])} target protein(s)",
               parent=job["parent"],
               targets=[t["symbol"] for t in context["targets"]])
+
+        pocket, pocket_note = await _load_pocket(
+            job["drug_id"], context["targets"], context["parent_smiles"])
+        job["pocket"] = ({"pdb_id": pocket.pdb_id, "resolution_A": pocket.resolution_A}
+                         if pocket else None)
+        _emit(job, "pocket", text=(
+            f"Found {context['parent_name']} inside its target in {pocket.pdb_id}"
+            + (f" at {pocket.resolution_A} A" if pocket.resolution_A else "")
+            + ". Every molecule will be placed there to see whether it fits."
+        ) if pocket else pocket_note)
+        if pocket:
+            context["text"] += (
+                f"\n\nA crystal structure ({pocket.pdb_id}) records exactly where "
+                f"{context['parent_name']} sits inside its target. Every molecule you propose will "
+                "be laid onto that position by its shared core, and any atom that ends up inside "
+                "the protein counts against it. Keep the core that binds, and grow into open space "
+                "rather than into the protein.")
 
         history: list[str] = []
         seen: set[str] = set()
@@ -446,6 +508,30 @@ async def _run(job_id: str) -> None:
                     seen.add(smiles)
                     check = await asyncio.to_thread(
                         chemcheck.evaluate, smiles, context["parent_smiles"], context["parent_name"])
+                    if check["valid"]:
+                        fit, note = None, None
+                        if pocket:
+                            try:
+                                fit = await asyncio.to_thread(pocket_mod.place, smiles, pocket)
+                            except Exception as exc:
+                                note = str(exc)
+                        else:
+                            note = pocket_note
+                        check["checks"].append(pocket_mod.as_check(fit, note))
+                        if fit:
+                            check["properties"]["pocket"] = {
+                                k: fit[k] for k in
+                                ("pdb_id", "clashes", "atoms", "rmsd", "core_atoms", "closest_A")}
+                            check["pose_sdf"] = fit["sdf"]
+                        # the worst check still decides, now that fit is one of them
+                        statuses = [c["status"] for c in check["checks"]]
+                        check["status"] = ("fail" if "fail" in statuses
+                                           else "warn" if "warn" in statuses else "pass")
+                        failed = [c["problem"] for c in check["checks"] if c["status"] == "fail"]
+                        warned = [c["problem"] for c in check["checks"] if c["status"] == "warn"]
+                        check["summary"] = ("Passes every check." if check["status"] == "pass"
+                                            else "Rejected: " + "; ".join(failed) + "." if failed
+                                            else "Usable, but " + "; ".join(warned) + ".")
 
                 attempt = {"id": attempt_id, "round": round_no, "name": name,
                            "rationale": proposal.get("rationale", ""),
