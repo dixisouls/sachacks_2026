@@ -9,10 +9,10 @@ const NODES = {
   cbd: { x: 70, y: 190, r: 24, fill: "var(--drug)", label: "Cannabidiol", mono: false },
   rett: { x: 650, y: 190, r: 28, fill: "var(--disease)", label: "Rett syndrome", mono: false },
   cnr1: { x: 430, y: 80, r: 15, fill: "var(--gene)", label: "CNR1", mono: true },
-  nabi: { x: 230, y: 56, r: 13, fill: "var(--drug-soft)", label: "Nabiximols", mono: false },
+  nabi: { x: 230, y: 56, r: 13, fill: "#F0A46B", label: "Nabiximols", mono: false },
   htr2a: { x: 250, y: 270, r: 14, fill: "var(--gene)", label: "HTR2A", mono: true },
   htr2c: { x: 450, y: 290, r: 14, fill: "var(--gene)", label: "HTR2C", mono: true },
-  asd: { x: 360, y: 372, r: 14, fill: "#9C8DEA", label: "Autism spectrum disorder", mono: false },
+  asd: { x: 360, y: 372, r: 14, fill: "#CF7FB6", label: "Autism spectrum disorder", mono: false },
 } as const;
 type K = keyof typeof NODES;
 
@@ -31,8 +31,8 @@ const EDGES: { a: K; b: K; dashed?: boolean; tag: string }[] = [
 const STORIES: { type: PathType; title: string; chain: K[]; text: string; inferred: boolean }[] = [
   { type: "shared_biology", title: "Shared biology", chain: ["cbd", "cnr1", "rett"], inferred: false, text: "Cannabidiol targets CNR1, which is associated with Rett syndrome." },
   { type: "sibling_disease", title: "Sibling disease", chain: ["cbd", "asd", "rett"], inferred: false, text: "Cannabidiol treats autism spectrum disorder, a sibling of Rett syndrome." },
-  { type: "chemical_analog", title: "Look-alike", chain: ["cbd", "nabi", "cnr1", "rett"], inferred: true, text: "Cannabidiol is 73% structurally similar to nabiximols, which targets CNR1, a gene associated with Rett syndrome." },
-  { type: "protein_homolog", title: "Homolog", chain: ["cbd", "htr2a", "htr2c", "rett"], inferred: true, text: "Cannabidiol targets HTR2A, whose protein is 61% identical to HTR2C, a gene associated with Rett syndrome." },
+  { type: "chemical_analog", title: "Look-alike drug", chain: ["cbd", "nabi", "cnr1", "rett"], inferred: true, text: "Cannabidiol is 73% structurally similar to nabiximols, which targets CNR1, a gene associated with Rett syndrome." },
+  { type: "protein_homolog", title: "Related protein", chain: ["cbd", "htr2a", "htr2c", "rett"], inferred: true, text: "Cannabidiol targets HTR2A, whose protein is 61% identical to HTR2C, a gene associated with Rett syndrome." },
 ];
 
 function curve(a: K, b: K) {
@@ -64,42 +64,31 @@ export default function PathExplorer() {
   const onChain = (a: K, b: K) => s.chain.some((k, j) => (k === a && s.chain[j + 1] === b) || (k === b && s.chain[j + 1] === a));
 
   return (
-    <div className="flex flex-wrap items-center gap-10">
-      <div className="min-w-0 flex-[1_1_320px]">
-        <div role="group" aria-label="Path types" className="flex flex-wrap gap-2">
-          {STORIES.map((st, j) => (
-            <button
-              key={st.type}
-              aria-pressed={j === i}
-              onClick={() => {
-                setI(j);
-                setAuto(false);
-              }}
-              className={`inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-bold transition-all ${
-                j === i ? "bg-foreground text-background shadow-soft" : "bg-surface/70 text-foreground hover:bg-surface"
-              }`}
-            >
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={st.inferred ? { border: "2px dashed currentColor" } : { background: j === i ? "var(--background)" : "var(--accent)" }}
-              />
-              {st.title}
-            </button>
-          ))}
-        </div>
-        <p key={s.type} className="mt-8 min-h-[96px] text-2xl font-semibold leading-snug tracking-tight [animation:fadein_.5s_ease]">
-          {s.text}
-        </p>
-        <p className="mt-3 text-sm text-muted">
-          {s.inferred ? "Inferred from similarity. Shown as a dashed line and never stated as fact." : "Recorded in the knowledge graph."}
-        </p>
-        <Link href="/d/MONDO_0010726/CHEMBL190461" className="mt-6 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-accent-ink hover:underline">
-          See cannabidiol for Rett syndrome
-          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        </Link>
+    <div className="flex flex-col items-center">
+      <div role="group" aria-label="Path types" className="grid w-full max-w-[760px] grid-cols-2 gap-1 rounded-[16px] border border-line bg-surface p-1 sm:grid-cols-4">
+        {STORIES.map((st, j) => (
+          <button
+            key={st.type}
+            aria-pressed={j === i}
+            onClick={() => {
+              setI(j);
+              setAuto(false);
+            }}
+            className={`flex h-11 items-center justify-center gap-2 rounded-[12px] px-3 text-[14px] font-semibold transition-colors ${
+              j === i ? "bg-foreground text-surface" : "text-muted hover:bg-sunken hover:text-foreground"
+            }`}
+          >
+            <span
+              aria-hidden="true"
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={st.inferred ? { border: "2px dashed currentColor" } : { background: "currentColor" }}
+            />
+            {st.title}
+          </button>
+        ))}
       </div>
 
-      <div className="min-w-0 flex-[2_1_480px] rounded-[28px] bg-surface p-2 shadow-float sm:rounded-[32px] sm:p-3">
+      <div className="panel mt-6 w-full max-w-[960px] p-2 sm:p-4">
         <svg viewBox={fs > 1 ? "-50 -30 830 480" : "0 0 720 420"} className="w-full" role="img" aria-label={s.text}>
           {EDGES.map((e) => {
             const on = onChain(e.a, e.b);
@@ -138,6 +127,18 @@ export default function PathExplorer() {
             );
           })}
         </svg>
+      </div>
+
+      <div className="mt-8 flex min-h-[150px] max-w-[680px] flex-col items-center text-center">
+        <p key={s.type} className="fadein text-[clamp(20px,2.4vw,26px)] font-semibold leading-snug tracking-[-0.02em]">
+          {s.text}
+        </p>
+        <p className="mt-3 text-[14px] text-muted">
+          {s.inferred ? "Inferred from similarity, so it is drawn dashed and never stated as fact." : "Recorded in the knowledge graph."}
+        </p>
+        <Link href="/d/MONDO_0010726/CHEMBL190461" className="mt-4 inline-flex h-10 items-center text-[14px] font-semibold text-accent-ink underline-offset-4 hover:underline">
+          Open cannabidiol for Rett syndrome
+        </Link>
       </div>
     </div>
   );
