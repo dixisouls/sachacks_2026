@@ -44,6 +44,15 @@ function curve(a: K, b: K) {
 export default function PathExplorer() {
   const [i, setI] = useState(0);
   const [auto, setAuto] = useState(true);
+  // the 720-wide drawing shrinks to ~0.45x on a phone; scale labels and nodes back up so they stay readable
+  const [fs, setFs] = useState(1);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const on = () => setFs(mq.matches ? 1.9 : 1);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
 
   useEffect(() => {
     if (!auto) return;
@@ -90,8 +99,8 @@ export default function PathExplorer() {
         </Link>
       </div>
 
-      <div className="min-w-0 flex-[2_1_480px] rounded-[32px] bg-surface p-3 shadow-float">
-        <svg viewBox="0 0 720 420" className="w-full" role="img" aria-label={s.text}>
+      <div className="min-w-0 flex-[2_1_480px] rounded-[28px] bg-surface p-2 shadow-float sm:rounded-[32px] sm:p-3">
+        <svg viewBox={fs > 1 ? "-50 -30 830 480" : "0 0 720 420"} className="w-full" role="img" aria-label={s.text}>
           {EDGES.map((e) => {
             const on = onChain(e.a, e.b);
             return (
@@ -101,7 +110,7 @@ export default function PathExplorer() {
                 fill="none"
                 stroke={on ? "var(--accent)" : "var(--foreground)"}
                 strokeOpacity={on ? 0.9 : 0.1}
-                strokeWidth={on ? 4 : 2}
+                strokeWidth={(on ? 4 : 2) * Math.min(fs, 1.5)}
                 strokeDasharray={e.dashed ? "7 7" : undefined}
                 strokeLinecap="round"
                 style={{ transition: "all .5s ease" }}
@@ -113,12 +122,12 @@ export default function PathExplorer() {
             const on = s.chain.includes(k);
             return (
               <g key={k} style={{ opacity: on ? 1 : 0.25, transition: "opacity .5s ease" }}>
-                <circle cx={n.x} cy={n.y} r={on ? n.r + 2 : n.r} fill={n.fill} style={{ transition: "r .4s" }} />
+                <circle cx={n.x} cy={n.y} r={(on ? n.r + 2 : n.r) * Math.min(fs, 1.35)} fill={n.fill} style={{ transition: "r .4s" }} />
                 <text
                   x={n.x}
-                  y={n.y < 120 ? n.y - n.r - 12 : n.y + n.r + 22}
+                  y={n.y < 120 ? n.y - n.r * Math.min(fs, 1.35) - 12 * fs : n.y + n.r * Math.min(fs, 1.35) + 20 * fs}
                   textAnchor="middle"
-                  fontSize={n.mono ? 13 : 14}
+                  fontSize={(n.mono ? 13 : 14) * fs}
                   fontWeight={n.mono ? 500 : 700}
                   className={n.mono ? "font-mono" : "font-sans"}
                   fill="var(--foreground)"

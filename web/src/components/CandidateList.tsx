@@ -28,11 +28,11 @@ export default function CandidateList({
               href={`/d/${encodeURIComponent(diseaseId)}/${encodeURIComponent(c.drug_id)}`}
               scroll={false}
               aria-current={isSel ? "true" : undefined}
-              className={`flex min-h-11 items-center gap-3.5 rounded-3xl py-2.5 pl-2 pr-4 transition-all ${
+              className={`flex min-h-11 items-center gap-3 rounded-3xl py-2.5 pl-1 pr-3 transition-all sm:gap-3.5 sm:pl-2 sm:pr-4 ${
                 isSel ? "bg-surface shadow-soft" : "hover:bg-surface/60"
               }`}
             >
-              <span className="w-7 shrink-0 text-right text-[22px] font-light text-faint">{c.rank}</span>
+              <span className="w-6 shrink-0 text-right text-xl font-light text-faint sm:w-7 sm:text-[22px]">{c.rank}</span>
               <ScoreRing score={c.score} />
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="flex items-center gap-2">
@@ -55,8 +55,13 @@ export default function CandidateList({
                   )}
                   {!c.approved && c.max_phase != null && <span> · phase {c.max_phase}</span>}
                 </span>
+                <span className="sm:hidden">
+                  <ReadinessDot value={c.readiness} />
+                </span>
               </span>
-              <ReadinessDot value={c.readiness} />
+              <span className="hidden sm:inline-flex">
+                <ReadinessDot value={c.readiness} />
+              </span>
             </Link>
           </li>
         );
