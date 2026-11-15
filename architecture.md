@@ -6,6 +6,36 @@ Where this document and the README disagree, this document wins. The main change
 
 All numbers below were measured on the OptimusKG v3.2 largest connected component (`lcc=True`).
 
+## Build order and status
+
+| # | Piece | Files | Status |
+|:-|:-|:-|:-|
+| 1 | Artifacts | `scripts/load_graph.py`, `scripts/build_artifacts.py` | Done. 12.6 MB, builds in ~6 s |
+| 2 | Scoring core, two lists, search, CLI | `api/scoring.py`, `api/search.py`, `scripts/query.py` | Done. ~3 ms per disease |
+| 2b | Compound and sequence similarity layers | `scripts/build_similarity.py` | Done. +0.4 MB, ~35 s |
+| 3 | Rediscovery test | `scripts/rediscovery.py` | Next: tunes the four weights |
+| 4 | Backend API | `api/main.py`, `api/models.py` | |
+| 5 | Frontend skeleton (search, two lists, path graph) | `web/` | |
+| 6 | Evidence + brief | `api/evidence/`, `api/brief.py` | |
+| 7 | 3D structures | `api/structures.py`, `StructureViewer.tsx` | |
+| 8 | Hosting + prewarm | `scripts/prewarm.py`, deploy config | |
+
+Setup on any machine (macOS or Windows):
+
+```bash
+python -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python scripts/build_artifacts.py   # downloads the graph on first run
+python scripts/build_similarity.py  # optional layers; needs mmseqs for the sequence half
+python scripts/query.py "multiple sclerosis"
+python scripts/query.py "Rett syndrome" --explain CHEMBL701
+```
+
+`mmseqs` is only needed to *build* `S.npz`. Once it is built it ships as an
+artifact, so teammates on Windows can pull it and run everything without the
+binary. Without `C.npz` or `S.npz` the scorer quietly falls back to graph paths.
+
 ---
 
 ## 1. System overview
@@ -62,7 +92,9 @@ All numbers below were measured on the OptimusKG v3.2 largest connected componen
 | `DRG` | 17,747 | Yes | `name`, `canonical_smiles`, `inchi_key`, `is_approved`, `maximum_clinical_trial_phase`, `year_of_first_approval`, `black_box_warning`, `has_been_withdrawn`, `mrdef`, `type`, `synonyms`, `cd_formula`, `cd_mol_weight` |
 | `BPO`, `PHE`, `ANA`, `MFN`, `CCO`, `PWY`, `EXP` | 75,944 total | No (v1) | Possible later path types (pathways, phenotypes) |
 
-**Approved drugs:** `is_approved == "True"` matches **3,999** drugs (6,927 are false and 6,821 null). Only approved drugs are ever shown as candidates. That is the product promise.
+**Approved vs not approved:** `is_approved == true` matches **3,999** drug nodes (6,927 are false and 6,821 null). Results are always shown as **two separate lists**: approved drugs (the repurposing pitch) and not-approved compounds (investigational or withdrawn, useful for researchers). See §4.3.
+
+**Salt forms:** 3,836 drug nodes are salts linked to a parent by `DRG-DRG PARENT` (from = parent, e.g. METFORMIN → METFORMIN HYDROCHLORIDE). The build merges each salt into its parent: targets and indications are combined, and the parent counts as approved if any form is approved. After merging: **13,911 drugs, 2,924 approved**.
 
 All property values arrive as a JSON string in the `properties` column. Nested values such as `synonyms` and `associated_proteins` are Python-style list strings with single quotes. Parse them with `ast.literal_eval`, not `json.loads`.
 
@@ -123,12 +155,14 @@ Produces everything the backend needs. The output must stay under about 150 MB s
 | `drugs.parquet` | `drug_id, idx, name, synonyms, smiles, inchi_key, is_approved, max_phase, year_approved, black_box, withdrawn, mrdef, type, formula, mol_weight` | All 17,747 drugs. `idx` is the row index in T. Drop `mol_image_base64` and `mol_file_base64` because they are large and not needed |
 | `genes.parquet` | `gene_id, idx, symbol, name, uniprot_id` | Only genes that appear in T or M |
 | `diseases.parquet` | `disease_id, idx, name, description, synonyms (list), therapeutic_areas, n_genes` | `n_genes` = number of M edges, used to warn about thin diseases |
-| `indications.parquet` | `drug_id, disease_id, phase, status (approved/trial), reference_ids, relation` | Includes OFF_LABEL_USE rows with `relation` set |
-| `contraindications.parquet` | `drug_id, disease_id` | |
-| `T.npz` | drugs × genes, CSR, binary | 1 if any `DRG-GEN` edge exists. Also save `T_rel.parquet` (drug_id, gene_id, relation, source_url) for path labels |
+| `drug_disease.parquet` | `drug_id, disease_id, relation, phase, status (approved/trial/other/n/a), trial_ids` | INDICATION, CONTRAINDICATION and OFF_LABEL_USE in one table, salts merged into parents |
+| `drug_gene.parquet` | `drug_id, gene_id, relation (list), source_url` | Path labels ("ANTAGONIST") and FDA label citations |
+| `T.npz` | drugs × genes, CSR, binary | 1 if any `DRG-GEN` edge exists |
 | `M.npz` | genes × diseases, CSR, float32 | `evidence_score` where ≥ 0.1 |
 | `H.npz` | diseases × diseases, CSR, binary | H[parent, child] = 1 |
 | `I.npz` | drugs × diseases, CSR, binary | Approved + trial indications (training set for the sibling path) |
+| `C.npz`, `chem_pairs.parquet` | drugs × drugs, CSR, Tanimoto | From `build_similarity.py`, see §4.2b |
+| `S.npz`, `homolog_pairs.parquet` | genes × genes, CSR, fraction identity | From `build_similarity.py`, see §4.2b |
 | `eval.json` | Rediscovery results | See §5 |
 
 Matrix sizes: T is 17.7k × ~20k genes with ~37k nonzeros (tiny). M has ~1.84M nonzeros (~22 MB). Both fit easily in hosted RAM.
@@ -164,16 +198,47 @@ B   = I @ Sib                                    # drugs × diseases
 
 Siblings are used, not parents or children, because §4.3 already excludes drugs indicated for the parent/child family. A one-hop term would only score drugs that get removed anyway.
 
-**Combined score for one disease column `j`:**
+**Path C, chemical look-alike.** The drug resembles another drug whose target reaches the disease. This finds candidates whose own targets are missing from the graph, which is common for older drugs.
 
 ```
-a = A[:, j] / max(A[:, j])        # each component scaled to 0..1 within the disease
-b = B[:, j] / max(B[:, j])
-score = a + λ · b                 # λ = 0.5 to start, tune on rediscovery
+C = Cn @ A[:, j]        # Cn = degree-weighted Tanimoto similarity, drugs × drugs
+```
+
+**Path D, protein homolog.** The drug hits a protein whose close sequence relative is associated with the disease. This is the "similar targets bind similar drugs" principle, and it is the layer that helps most where the disease gene has no drug at all.
+
+```
+D = Tn @ (Sn @ Mn[:, j])    # Sn = degree-weighted sequence identity, genes × genes
+```
+
+**Combined score for one disease column `j`:** each component is scaled to 0..1 within the disease, then weighted.
+
+```
+score = 1.0·a + 0.5·b + 0.4·c + 0.4·d
 display_score = round(100 · score / max(score))
 ```
 
-Query time computes one column only (`Tn @ Mn[:, j]`), a sparse matrix-vector product that takes milliseconds. No full drugs × diseases matrix is ever built.
+The weights live in `DEFAULT_WEIGHTS` in `api/scoring.py` and get tuned by the rediscovery test (§5).
+
+Query time computes one column only, a few sparse matrix-vector products that take about 3 ms. No full drugs × diseases matrix is ever built.
+
+**C and D are inferred, not observed.** Every path, edge and candidate they produce carries `inferred: true` plus the number it rests on (Tanimoto coefficient or percent identity). The UI marks them, and the brief must word them as inference ("X is 62% structurally similar to Y, which targets…"), never as a known fact. A candidate supported *only* by C or D has `inferred_only: true`.
+
+### 4.2b Similarity layers (`scripts/build_similarity.py`)
+
+| Artifact | Built from | Method | Result |
+|:-|:-|:-|:-|
+| `C.npz` + `chem_pairs.parquet` | `canonical_smiles` on drug nodes (8,342 of 13,911 have one) | RDKit Morgan fingerprints, radius 2, 2048 bits, Tanimoto ≥ 0.55, top 15 per drug. Columns limited to the 5,667 drugs that have a gene target | 10,716 pairs; 3,649 drugs have a look-alike. ~8 s, no download |
+| `S.npz` + `homolog_pairs.parquet` | UniProt accessions on gene nodes (18,762 of 19,608 have one) | MMseqs2 `easy-search`, ≥ 40% identity, e-value ≤ 1e-10, ≥ 60% coverage, top 10 per protein. 3,525 drug-target proteins searched against 18,661 disease-associated proteins | 7,519 pairs; 2,155 drug targets have a homolog. ~25 s plus a one-time 7.5 MB UniProt download into `data/` |
+
+Both are optional and loaded only if present. `rdkit` is pip-installable everywhere; `mmseqs` is a build-time-only dependency (see the setup note above).
+
+**Worked examples that show the layers earning their place**
+
+* Multiple sclerosis: **R-406** enters the not-approved list through Path C alone, as the chemical twin of **fostamatinib**, which sits at #3 in the approved list. Fostamatinib is a prodrug of R-406, so the structural link is real.
+* Multiple sclerosis: **omipalisib** picks up Path D support because it targets PIK3R1, whose protein is 59% identical to PIK3R2, another MS-associated gene.
+* Rett syndrome (18 genes, a genuinely thin rare disease): **baclofen** ranks #1 approved and **arbaclofen**, its active enantiomer, tops the not-approved list. Arbaclofen has in fact been trialled in Rett syndrome, which makes this a good demo case.
+
+**What we deliberately did not build:** patient genomes or variant data, viral genome search, and protein language model embeddings. Each is a separate project, and none fits in the remaining time. The graph holds no DNA sequence, so protein sequence is the right level to compare at; a gene's chromosome location is available in the node properties if the UI ever wants to show it.
 
 ### 4.3 Disease family, exclusion and readiness
 
@@ -181,19 +246,25 @@ Query time computes one column only (`Tn @ Mn[:, j]`), a sparse matrix-vector pr
 family(j) = {j} ∪ parents(j) ∪ all descendants(j)       # via H; descendants by BFS
 ```
 
-For each approved drug with `score > 0`:
+Every drug with `score > 0` and no approved indication for any disease in the family goes into one of two lists, each ranked separately:
 
-| Condition (checked in this order) | Result |
+* **Approved list:** `is_approved` and not withdrawn.
+* **Not approved list:** everything else (investigational compounds and withdrawn drugs).
+
+Drugs with an approved indication for the family are **excluded** from both (already a treatment). The response reports the total count.
+
+Readiness tags, checked in this order:
+
+| Approved list | Not approved list |
 |:-|:-|
-| Approved indication for any disease in family | **Excluded** (already a treatment) |
-| `CONTRAINDICATION` to any disease in family, or `black_box == True` | Tag `SAFETY_CONCERN` |
-| Trial indication (phase 0.5–3) for any disease in family | Tag `IN_TRIALS`, store highest phase and NCT IDs |
-| `OFF_LABEL_USE` to any disease in family | Tag `OFF_LABEL` |
-| Otherwise | Tag `APPROVED_UNTESTED` (the interesting ones) |
+| `SAFETY_CONCERN`: contraindication to the family, or black box warning | `WITHDRAWN`: withdrawn from market |
+| `IN_TRIALS`: trial indication (phase 0.5–3) for the family, with phase and NCT IDs | `SAFETY_CONCERN`: contraindication to the family |
+| `OFF_LABEL`: off-label use for the family | `IN_TRIALS`: trial indication for the family |
+| `APPROVED_UNTESTED`: none of the above (the interesting ones) | `INVESTIGATIONAL`: none of the above. `max_phase` shows how far the compound got overall |
 
 The code computes the readiness tag. The LLM never sets it.
 
-Also drop drugs where `withdrawn == True`.
+Implemented in `api/scoring.py` (`Scorer.candidates`). Check it from the command line with `python scripts/query.py "multiple sclerosis"`.
 
 ### 4.4 Path extraction for one pair (drug d, disease j)
 
@@ -298,17 +369,25 @@ class DiseaseHit(BaseModel):
     n_genes: int; therapeutic_areas: list[str]
 
 class Candidate(BaseModel):
-    rank: int; drug_id: str; drug_name: str
-    score: int                                  # 0..100
-    score_components: dict[str, float]          # {"shared_biology": .., "sibling_disease": ..}
-    readiness: Literal["APPROVED_UNTESTED","IN_TRIALS","OFF_LABEL","SAFETY_CONCERN"]
+    rank: int; drug_id: str; drug_name: str     # rank is within its own list
+    score: int                                  # 0..100, relative to the best drug across both lists
+    score_components: dict[str, float]          # the four components of 4.2, each 0..1
+    lead_path: str | None                       # which component contributed most
+    inferred_only: bool                         # supported only by similarity, no graph path
+    readiness: Literal["APPROVED_UNTESTED","IN_TRIALS","OFF_LABEL","SAFETY_CONCERN",
+                       "INVESTIGATIONAL","WITHDRAWN"]
+    approved: bool; max_phase: float | None
     trial_phase: float | None; trial_ids: list[str]
     top_gene_symbols: list[str]                 # up to 3, for the list row
     year_approved: int | None; black_box: bool
 
 class CandidatesResponse(BaseModel):
-    disease: DiseaseHit; candidates: list[Candidate]
-    excluded_count: int; warning: str | None
+    disease: DiseaseSummary
+    approved: list[Candidate]                   # list 1
+    investigational: list[Candidate]            # list 2: not approved
+    excluded_count: int                         # scored drugs removed as already approved
+    already_approved_total: int                 # all drugs approved for the family
+    family_size: int; warning: str | None
 
 class PathNode(BaseModel):
     id: str; type: Literal["drug","gene","disease"]; label: str
@@ -316,12 +395,22 @@ class PathNode(BaseModel):
 
 class PathEdge(BaseModel):
     source: str; target: str
-    relation: str                               # "ANTAGONIST", "ASSOCIATED_WITH", "INDICATION", "SIBLING_OF"
-    weight: float | None; citation: str | None  # "KG:CHEMBL1000|ENSG..", FDA label URL
+    relation: str                               # ANTAGONIST, ASSOCIATED_WITH, INDICATION,
+                                                # SIBLING_OF, SIMILAR_STRUCTURE, SIMILAR_SEQUENCE
+    weight: float | None                        # evidence score, Tanimoto or identity
+    citation: str | None                        # "KG:..", "CHEM:..|tanimoto=0.62", "SEQ:..|identity=0.59"
+    inferred: bool                              # true for the two similarity edge types
+
+class Path(BaseModel):
+    type: Literal["shared_biology","sibling_disease","chemical_analog","protein_homolog"]
+    nodes: list[str]                            # ordered node ids
+    contribution: float | None
+    inferred: bool; similarity: float | None
+    explanation: str                            # one plain sentence, safe to show as-is
 
 class PathsResponse(BaseModel):
     nodes: list[PathNode]; edges: list[PathEdge]
-    paths: list[list[str]]                      # ordered node ids, strongest first
+    paths: list[Path]                           # strongest first
 
 class EvidenceItem(BaseModel):
     id: str                                     # "PMID:123", "NCT01234567", "FAERS:cetirizine", "KG:..", "CHEMBL_MOA:.."
@@ -475,7 +564,7 @@ class StructurePlan(BaseModel):
 | Route | Page |
 |:-|:-|
 | `/` | Landing: one-line pitch, search box, 3 example disease chips (the prewarmed demo diseases), disclaimer |
-| `/d/:diseaseId` | Results: ranked list on the left, empty detail panel on the right |
+| `/d/:diseaseId` | Results: two ranked lists on the left (Approved / Not approved), empty detail panel on the right |
 | `/d/:diseaseId/:drugId` | Same page with the detail panel open. Shareable URLs let judges jump straight in |
 | `/validation` | Rediscovery results from `/api/eval`: bar chart of Hits@10 / Hits@50 per method, with the famous case |
 
@@ -487,8 +576,11 @@ web/src/
 ├── pages/Landing.tsx  Results.tsx  Validation.tsx
 ├── components/
 │   ├── DiseaseSearch.tsx      # debounced input, dropdown with name, match type, n_genes; thin diseases greyed
-│   ├── CandidateList.tsx      # rows: rank, drug name, score bar, ReadinessBadge, top genes
+│   ├── CandidateLists.tsx     # two sections, "Approved" and "Not approved", each with its own count;
+│   │                          # side by side on wide screens, tabs on phones
+│   ├── CandidateList.tsx      # rows: rank, drug name, score bar, ReadinessBadge, top genes, max phase
 │   ├── ReadinessBadge.tsx     # APPROVED_UNTESTED green · IN_TRIALS blue · OFF_LABEL purple · SAFETY_CONCERN red
+│   │                          # INVESTIGATIONAL grey · WITHDRAWN dark red
 │   ├── DetailPanel.tsx        # header (drug, disease, score) + tabs
 │   ├── PathGraph.tsx          # Cytoscape
 │   ├── StructureViewer.tsx    # 3Dmol, §9.3
