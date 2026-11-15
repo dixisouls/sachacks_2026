@@ -33,9 +33,13 @@ import scipy.sparse as sp
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ARTIFACTS = ROOT / "artifacts"
 
-# Component weights. Path A is the anchor at 1.0; tune the rest with scripts/rediscovery.py.
+# Component weights, chosen by the grid sweep in scripts/rediscovery.py (see artifacts/eval.json).
+# protein_homolog is 0: it did not improve rediscovery, so it does not move the ranking.
+# Homolog paths are still computed and shown as supporting context, because the
+# rediscovery test cannot measure them fairly -- it only asks about drugs whose
+# targets are already recorded, which is exactly the case that layer is not for.
 DEFAULT_WEIGHTS = {"shared_biology": 1.0, "sibling_disease": 0.5,
-                   "chemical_analog": 0.4, "protein_homolog": 0.4}
+                   "chemical_analog": 0.2, "protein_homolog": 0.0}
 
 
 def _degree_normalize(X: sp.csr_matrix, damping: float) -> sp.csr_matrix:
