@@ -102,7 +102,9 @@ echo "         ready: ${SUMMARY:-up}"
 
 # ---- frontend --------------------------------------------------------------
 echo "frontend http://localhost:$WEB_PORT      -> $WEB_LOG"
-export NEXT_PUBLIC_API_URL="http://localhost:$API_PORT"
+# 127.0.0.1, not localhost: on Windows and some Linux setups "localhost" tries IPv6 first and
+# waits ~200 ms per request before falling back to IPv4, which uvicorn is bound to.
+export NEXT_PUBLIC_API_URL="http://127.0.0.1:$API_PORT"
 
 set -m
 if [[ $PROD -eq 1 ]]; then

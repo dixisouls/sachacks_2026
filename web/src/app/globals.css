@@ -82,7 +82,7 @@ body {
   0%, 100% { transform: translate(0, 0) scale(1); }
   50% { transform: translate(0, -10px) scale(1.02); }
 }
-.float-slow { animation: float 9s ease-in-out infinite; }
+.float-slow { animation: float 9s ease-in-out infinite; will-change: transform; }
 
 @keyframes pulse-ring {
   0% { transform: scale(1); opacity: 0.5; }

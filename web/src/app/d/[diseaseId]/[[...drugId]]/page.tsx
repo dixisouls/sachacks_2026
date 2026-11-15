@@ -6,6 +6,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useEffect } from "react";
 import Blobs from "@/components/Blobs";
 import CandidateLists from "@/components/CandidateLists";
 import DetailPanel from "@/components/DetailPanel";
@@ -20,12 +21,20 @@ export default function Results() {
   const drugId = params.drugId?.[0] ? decodeURIComponent(params.drugId[0]) : undefined;
 
   const q = useQuery({ queryKey: ["candidates", diseaseId], queryFn: () => getCandidates(diseaseId) });
+
+  // download the path-graph library while the user is still reading the list, so the first drug opens instantly
+  useEffect(() => {
+    const warm = () => void import("cytoscape");
+    const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
+    if (w.requestIdleCallback) w.requestIdleCallback(warm);
+    else setTimeout(warm, 1500);
+  }, []);
   const data = q.data;
   const candidate = data && drugId ? [...data.approved, ...data.investigational].find((c) => c.drug_id === drugId) : undefined;
 
   return (
     <div className="relative isolate overflow-hidden">
-      <Blobs variant="lilac" />
+      <Blobs variant="lilac" still />
       <div className="mx-auto max-w-[1320px] px-4 pb-10 sm:px-8">
         <div className="max-w-[460px]">
           <DiseaseSearch compact initial={data?.disease.name ?? ""} />

@@ -35,7 +35,7 @@ export default function Validation() {
 
   return (
     <div className="relative isolate overflow-hidden">
-      <Blobs variant="mint" />
+      <Blobs variant="mint" still />
       <div className="mx-auto max-w-[1000px] px-4 pb-16 pt-8 sm:px-8">
         <p className="text-[15px] font-semibold text-accent-ink">Validation</p>
         <h1 className="mt-3 text-[clamp(38px,5vw,60px)] font-extrabold leading-[1.02] tracking-[-0.04em]">

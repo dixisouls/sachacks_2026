@@ -7,7 +7,7 @@ import { DEMO_DISEASES } from "@/lib/config";
 export default function TryIt() {
   return (
     <div className="relative isolate flex min-h-[calc(100dvh-84px)] flex-col overflow-hidden">
-      <Blobs variant="mint" />
+      <Blobs variant="mint" still />
       <section className="mx-auto w-full max-w-[860px] flex-1 px-4 pt-16 sm:px-8 sm:pt-28">
         <p className="text-[15px] font-semibold text-accent-ink">Step 1 of 2</p>
         <h1 className="mt-4 text-[clamp(40px,6vw,72px)] font-extrabold leading-[1] tracking-[-0.045em]">Which disease?</h1>
