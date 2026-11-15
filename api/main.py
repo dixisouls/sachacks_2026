@@ -22,9 +22,9 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from api.logging_setup import new_request_id, request_id, setup_logging, timed
 from api.models import (CandidatesResponse, DiseaseHit, DiseaseSummary, Health,
@@ -137,6 +137,18 @@ def resolve_disease(disease_id: str) -> int:
 
 
 # --------------------------------------------------------------------- routes
+@app.get("/", include_in_schema=False)
+def index():
+    """Opening the bare host should land somewhere useful, not on a 404."""
+    return RedirectResponse("/docs")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    """Browsers always ask; answer quietly instead of logging a 404 each time."""
+    return Response(status_code=204)
+
+
 @app.get("/api/health", response_model=Health, tags=["meta"])
 def health() -> Health:
     s = scorer()
