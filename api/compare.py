@@ -40,7 +40,11 @@ ARTIFACTS = Path(os.environ.get("ARTIFACT_DIR", ROOT / "artifacts"))
 
 WIDTH, HEIGHT = 340, 260
 MCS_TIMEOUT = 5
-HIGHLIGHT = (0.13, 0.63, 0.52)  # teal, readable on light and dark backgrounds
+# Colour by ROLE, not by molecule. Colouring each molecule its own colour draws the
+# shared core twice in two colours and hides the very thing the reader is looking for.
+SHARED = (0.80, 0.83, 0.82)   # muted grey-green: the part that is the same
+UNIQUE_LEFT = (0.05, 0.55, 0.47)   # teal:   only in the first molecule
+UNIQUE_RIGHT = (0.92, 0.45, 0.07)  # orange: only in the second
 N_CONFORMERS = 30   # candidates generated for the probe; the best-overlaying one is kept
 EMBED_SEED = 42     # fixed, so the same pair always renders identically
 
@@ -76,14 +80,18 @@ def _drugs() -> dict[str, dict]:
     return {r["drug_id"]: r for r in frame.iter_rows(named=True)}
 
 
-def _render(mol: Mol, highlight: list[int]) -> str:
+def _render(mol: Mol, shared: list[int], unique_colour: tuple[float, float, float]) -> str:
+    """Grey out the shared core and colour what is unique, so the eye lands on the difference."""
+    shared_set = set(shared)
+    unique = [a.GetIdx() for a in mol.GetAtoms() if a.GetIdx() not in shared_set]
+    colours = {i: SHARED for i in shared} | {i: unique_colour for i in unique}
+
     drawer = rdMolDraw2D.MolDraw2DSVG(WIDTH, HEIGHT)
-    options = drawer.drawOptions()
-    options.clearBackground = False  # let the page background show through
+    drawer.drawOptions().clearBackground = False  # let the page background show through
     rdMolDraw2D.PrepareAndDrawMolecule(
         drawer, mol,
-        highlightAtoms=highlight,
-        highlightAtomColors={i: HIGHLIGHT for i in highlight},
+        highlightAtoms=shared + unique,
+        highlightAtomColors=colours,
     )
     drawer.FinishDrawing()
     return drawer.GetDrawingText()
@@ -134,10 +142,12 @@ def build_comparison(drug_id: str, other_drug_id: str) -> Comparison:
         shared_atoms=len(hits_left),
         shared_smarts=mcs.smartsString or "",
         left=MoleculeImage(drug_id=drug_id, name=left["name"] or drug_id,
-                           smiles=left["smiles"], svg=_render(mol_left, hits_left),
+                           smiles=left["smiles"],
+                           svg=_render(mol_left, hits_left, UNIQUE_LEFT),
                            n_atoms=mol_left.GetNumAtoms(), n_shared_atoms=len(hits_left)),
         right=MoleculeImage(drug_id=other_drug_id, name=right["name"] or other_drug_id,
-                            smiles=right["smiles"], svg=_render(mol_right, hits_right),
+                            smiles=right["smiles"],
+                            svg=_render(mol_right, hits_right, UNIQUE_RIGHT),
                             n_atoms=mol_right.GetNumAtoms(), n_shared_atoms=len(hits_right)),
         caption=_caption(left["name"] or drug_id, right["name"] or other_drug_id,
                          tanimoto, stereo, len(hits_left), mol_left.GetNumAtoms(), stereo_only),
@@ -153,6 +163,9 @@ class Overlay3D(BaseModel):
     right_name: str
     left_shared_atoms: list[int] = Field(description="0-based atom indices of the shared core")
     right_shared_atoms: list[int]
+    left_unique_atoms: list[int] = Field(
+        description="atoms only in the first molecule; colour these to show the difference")
+    right_unique_atoms: list[int]
     core_rmsd_A: float = Field(description="how closely the shared cores superimpose")
     shared_atoms: int
     conformers_tried: int
@@ -223,11 +236,14 @@ def build_overlay(drug_id: str, other_drug_id: str) -> Overlay3D:
     probe, rmsd, tried = _best_overlay(right["smiles"], reference, pattern)
     shared_left = list(reference.GetSubstructMatch(pattern))
     shared_right = list(probe.GetSubstructMatch(pattern))
+    unique_left = [a.GetIdx() for a in reference.GetAtoms() if a.GetIdx() not in set(shared_left)]
+    unique_right = [a.GetIdx() for a in probe.GetAtoms() if a.GetIdx() not in set(shared_right)]
 
     return Overlay3D(
         left=MolToMolBlock(reference), right=MolToMolBlock(probe),
         left_name=left["name"] or drug_id, right_name=right["name"] or other_drug_id,
         left_shared_atoms=shared_left, right_shared_atoms=shared_right,
+        left_unique_atoms=unique_left, right_unique_atoms=unique_right,
         core_rmsd_A=round(rmsd, 3), shared_atoms=len(shared_left), conformers_tried=tried,
         # Say what this is. Computed conformers are not experimental structures, and an
         # overlay of two drugs is not a binding pose -- that claim belongs only to a
