@@ -7,6 +7,71 @@ Built for **SacHacks HackRx 2026**, **Track 01: Best Translational Science** (sp
 > RepurposeKG generates research hypotheses for experts. It never gives treatment advice.
 
 
+## Quick start
+
+The artifacts are committed, so you do **not** need to download the 21.8 GB graph to run this.
+
+**macOS and Linux**
+
+```bash
+git clone https://github.com/dixisouls/sachacks_2026.git
+cd sachacks_2026
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn api.main:app --reload --port 8000
+```
+
+**Windows (PowerShell)**
+
+```powershell
+git clone https://github.com/dixisouls/sachacks_2026.git
+cd sachacks_2026
+py -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn api.main:app --reload --port 8000
+```
+
+Open **http://localhost:8000/docs** for clickable API docs. Startup takes about 2 seconds, and requests answer in 2 to 4 ms.
+
+Try it without the server:
+
+```bash
+python scripts/query.py "multiple sclerosis"
+python scripts/query.py "Rett syndrome" --explain CHEMBL701
+python scripts/rediscovery.py --tune          # the accuracy number, about 90 s
+```
+
+### Working on the frontend
+
+The backend is running and ready. Start here:
+
+```bash
+curl "http://localhost:8000/api/diseases/search?q=rett"
+curl "http://localhost:8000/api/diseases/MONDO_0010726/candidates?limit=10"
+curl "http://localhost:8000/api/paths?drug_id=CHEMBL701&disease_id=MONDO_0010726"
+```
+
+`candidates` returns **two lists**, `approved` and `investigational`, meant to sit side by side. Response shapes with field descriptions are in `api/models.py`; the page and component plan is in `architecture.md` §10.
+
+Suggested demo disease: **Rett syndrome** (`MONDO_0010726`). Genuinely rare at 18 genes, and the top results hold up.
+
+### Rebuilding the artifacts
+
+Only needed if you change how scoring data is built. This downloads the full graph.
+
+```bash
+pip install -r requirements.txt -r requirements-build.txt
+python scripts/build_artifacts.py      # ~6 s after download
+python scripts/build_similarity.py     # ~35 s; sequence half needs `brew install mmseqs2`
+```
+
+---
+
+**`architecture.md` is the current build reference** — data, scoring, API, frontend, hosting, and what is done so far. The Setup and Build steps sections further down this README describe the original plan and have been superseded by it.
+
+
 ## Why this matters
 
 A new drug takes over a decade and billions of dollars to develop. An approved drug already has safety data, so finding a new use for one is the fastest route from discovery to bedside. This matters most for rare and neglected diseases, where nobody is funding the search.
