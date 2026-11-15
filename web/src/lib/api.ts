@@ -43,6 +43,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     try {
       const body = await res.json();
       if (typeof body?.detail === "string") detail = body.detail;
+      // FastAPI validation errors: detail is a list of {loc, msg}
+      else if (Array.isArray(body?.detail)) detail = body.detail.map((d: { loc?: unknown[]; msg?: string }) => `${d.loc?.at(-1) ?? "field"}: ${d.msg}`).join("; ");
       rid = body?.request_id;
     } catch {
       /* not JSON */
@@ -78,16 +80,21 @@ export function getPaths(drugId: string, diseaseId: string): Promise<PathsRespon
 export async function getBrief(drugId: string, diseaseId: string): Promise<Brief> {
   if (USE_MOCKS) return mock.mockBrief(drugId, diseaseId);
   try {
-    return await request<Brief>(`/api/brief`, {
-      method: "POST",
-      body: JSON.stringify({ drug_id: drugId, disease_id: diseaseId }),
-    });
+    // api/main.py takes the ids as query parameters, not a JSON body
+    return await request<Brief>(`/api/brief?${qs({ drug_id: drugId, disease_id: diseaseId })}`, { method: "POST" });
   } catch (e) {
-    // /api/brief is not built yet (architecture.md step 6). Until it is, show a sample built from live paths.
-    if (!(e instanceof ApiError) || (e.status !== 404 && e.status !== 405)) throw e;
+    // The brief is unavailable, not broken: 503 = no GEMINI_API_KEY on the backend, 404/405 = an older backend
+    // without the endpoint. Show the labelled sample built from live graph paths instead of an error.
+    if (!(e instanceof ApiError) || ![404, 405, 503].includes(e.status)) throw e;
+    // a 404 for an unknown drug or disease is a real error, not a missing endpoint
+    if (e.status === 404 && /no (drug|disease)/i.test(e.message)) throw e;
+    const reason =
+      e.status === 503
+        ? "the backend has no Gemini API key, so no literature brief was written"
+        : "this backend has no brief endpoint";
     const [paths, cands] = await Promise.all([getPaths(drugId, diseaseId), getCandidates(diseaseId)]);
     const cand = [...cands.approved, ...cands.investigational].find((c) => c.drug_id === drugId);
-    return mock.sampleBrief(drugId, diseaseId, paths, cand);
+    return mock.sampleBrief(drugId, diseaseId, paths, cand, reason);
   }
 }
 

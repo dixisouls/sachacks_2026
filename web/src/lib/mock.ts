@@ -65,7 +65,13 @@ export async function mockEval(): Promise<EvalResult> {
 
 /** SAMPLE brief built only from real path data and trial ids. No literature search happens here.
  *  Used until the backend exposes /api/brief. */
-export function sampleBrief(drugId: string, diseaseId: string, p: PathsResponse | undefined, cand: Candidate | undefined): Brief {
+export function sampleBrief(
+  drugId: string,
+  diseaseId: string,
+  p: PathsResponse | undefined,
+  cand: Candidate | undefined,
+  reason = "the app is running on the offline snapshot",
+): Brief {
   const evidence: Brief["evidence"] = [];
   const mechanism: Brief["mechanism"] = [];
   for (const path of (p?.paths ?? []).filter((x) => !x.inferred).slice(0, 3)) {
@@ -92,7 +98,8 @@ export function sampleBrief(drugId: string, diseaseId: string, p: PathsResponse 
     evidence,
     dropped_claims: 0,
     generated_at: new Date().toISOString(),
-    model: "sample, brief endpoint not built yet",
+    model: "sample from graph data",
+    sample_reason: reason,
   };
 }
 

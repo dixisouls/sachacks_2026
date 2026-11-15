@@ -27,12 +27,12 @@ export default function BriefView({ brief, loading, error, onRetry, onGraph }: P
   }
 
   const byId = new Map(brief.evidence.map((e) => [e.id, e]));
-  const sample = brief.model.startsWith("sample");
+  const sample = !!brief.sample_reason;
   return (
     <div className="space-y-8">
       {sample && (
-        <p className="rounded-full bg-[#FBEFD9] px-4 py-2 text-[13px] font-semibold text-[#6B4A06]">
-          Sample brief from graph data only. Literature and safety evidence arrive with the brief endpoint.
+        <p className="rounded-2xl bg-[#FBEFD9] px-4 py-2.5 text-[13px] font-semibold leading-snug text-[#6B4A06]">
+          Sample brief from graph data only: {brief.sample_reason}.
         </p>
       )}
       <Section title="Mechanism" claims={brief.mechanism} byId={byId} onGraph={onGraph} empty="No supported mechanism." />
@@ -66,6 +66,7 @@ export default function BriefView({ brief, loading, error, onRetry, onGraph }: P
       <p className="text-xs text-muted">
         {brief.dropped_claims > 0 && `${brief.dropped_claims} unsupported claim${brief.dropped_claims === 1 ? "" : "s"} removed · `}
         Generated {new Date(brief.generated_at).toLocaleString()} · {brief.model}
+        {brief.notes && brief.notes.length > 0 && <> · {brief.notes.join(" · ")}</>}
       </p>
     </div>
   );

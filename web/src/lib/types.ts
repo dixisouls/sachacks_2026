@@ -116,6 +116,10 @@ export interface Brief {
   dropped_claims: number;
   generated_at: string;
   model: string;
+  drug_name?: string;
+  disease_name?: string;
+  notes?: string[]; // evidence sources that returned nothing or were unavailable
+  sample_reason?: string; // set only on the frontend's labelled sample fallback
 }
 
 export type StructureMode = "BOUND" | "SEPARATE" | "DRUG_ONLY" | "NONE";
