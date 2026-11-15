@@ -40,10 +40,10 @@ export default function HeroChain() {
       {/* the line, from the centre of column 1 to the centre of column 3 */}
       <div aria-hidden="true" className="absolute left-[16.667%] right-[16.667%] top-6 h-[3px] -translate-y-1/2">
         <div className="h-full origin-left rounded-full bg-line-strong [animation:grow_1s_.25s_cubic-bezier(.65,0,.35,1)_both]" />
-        <span className="absolute left-1/4 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-line bg-surface px-2.5 py-0.5 text-[12px] font-medium text-muted fadein [animation-delay:.9s] max-sm:hidden">
+        <span className="absolute left-1/4 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-surface px-2.5 py-0.5 text-[12px] font-medium text-muted shadow-soft fadein [animation-delay:.9s] max-sm:hidden">
           acts on
         </span>
-        <span className="absolute left-3/4 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-line bg-surface px-2.5 py-0.5 text-[12px] font-medium text-muted fadein [animation-delay:1.1s] max-sm:hidden">
+        <span className="absolute left-3/4 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-surface px-2.5 py-0.5 text-[12px] font-medium text-muted shadow-soft fadein [animation-delay:1.1s] max-sm:hidden">
           linked to
         </span>
       </div>

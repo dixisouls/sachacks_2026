@@ -20,7 +20,7 @@ export default function FindDrugs() {
             <Link
               key={d.disease_id}
               href={`/d/${d.disease_id}`}
-              className="inline-flex h-9 items-center gap-2 rounded-full border border-line bg-surface px-3.5 font-semibold transition-colors hover:border-disease"
+              className="inline-flex h-9 items-center gap-2 rounded-full bg-surface px-3.5 font-semibold shadow-soft transition-colors hover:bg-lilac"
             >
               <span className="h-2 w-2 rounded-full bg-disease" />
               {d.name}

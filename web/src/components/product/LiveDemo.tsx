@@ -17,14 +17,14 @@ export default function LiveDemo() {
 
   return (
     <div className="panel overflow-hidden">
-      <div className="border-b border-line p-3">
-        <div role="group" aria-label="Example diseases" className="grid grid-cols-3 gap-1 rounded-[14px] bg-sunken p-1">
+      <div className="p-3">
+        <div role="group" aria-label="Example diseases" className="grid grid-cols-3 gap-1 rounded-full bg-soft p-1">
           {DEMO_DISEASES.map((d) => (
             <button
               key={d.disease_id}
               aria-pressed={d.disease_id === id}
               onClick={() => setId(d.disease_id)}
-              className={`flex h-10 items-center justify-center gap-2 truncate rounded-[11px] px-2 text-[13.5px] font-semibold transition-colors ${
+              className={`flex h-10 items-center justify-center gap-2 truncate rounded-full px-2 text-[13.5px] font-semibold transition-colors ${
                 d.disease_id === id ? "bg-surface text-foreground shadow-soft" : "text-muted hover:text-foreground"
               }`}
             >
@@ -35,12 +35,12 @@ export default function LiveDemo() {
         </div>
       </div>
 
-      <ol className="divide-y divide-line" aria-live="polite" aria-busy={q.isLoading}>
+      <ol className="flex flex-col gap-0.5 px-3" aria-live="polite" aria-busy={q.isLoading}>
         {q.isLoading && Array.from({ length: 5 }).map((_, i) => <li key={i} className="m-3 skeleton h-12" />)}
         {q.isError && <li className="p-6 text-center text-sm text-muted">Could not load drugs for this disease.</li>}
         {top.map((c) => (
           <li key={c.drug_id}>
-            <Link href={`/d/${id}/${encodeURIComponent(c.drug_id)}`} className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-field">
+            <Link href={`/d/${id}/${encodeURIComponent(c.drug_id)}`} className="flex items-center gap-3 rounded-3xl px-3 py-3 transition-colors hover:bg-soft-2">
               <span className="w-5 shrink-0 text-right text-[15px] font-semibold tabular-nums text-faint">{c.rank}</span>
               <span className="flex min-w-0 flex-1 flex-col gap-1">
                 <span className="truncate text-[16px] font-bold">{drugLabel(c.drug_name, c.drug_id)}</span>
@@ -59,9 +59,9 @@ export default function LiveDemo() {
         ))}
       </ol>
 
-      <div className="flex items-center justify-between gap-3 border-t border-line bg-field px-5 py-3">
+      <div className="mt-2 flex items-center justify-between gap-3 bg-soft-2 px-6 py-3.5">
         <p className="text-[13px] text-muted">Top 5 of {q.data?.approved.length ?? 50}. Click a drug to see why.</p>
-        <Link href={`/d/${id}`} className="inline-flex h-9 shrink-0 items-center rounded-full bg-foreground px-4 text-[13px] font-semibold text-surface hover:bg-accent-ink">
+        <Link href={`/d/${id}`} className="inline-flex h-9 shrink-0 items-center rounded-full bg-accent px-4 text-[13px] font-semibold text-white hover:bg-accent-ink">
           See all
         </Link>
       </div>

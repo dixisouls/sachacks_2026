@@ -65,7 +65,7 @@ export default function PathExplorer() {
 
   return (
     <div className="flex flex-col items-center">
-      <div role="group" aria-label="Path types" className="grid w-full max-w-[760px] grid-cols-2 gap-1 rounded-[16px] border border-line bg-surface p-1 sm:grid-cols-4">
+      <div role="group" aria-label="Path types" className="grid w-full max-w-[760px] grid-cols-2 gap-1 rounded-[24px] bg-surface p-1 shadow-soft sm:grid-cols-4 sm:rounded-full">
         {STORIES.map((st, j) => (
           <button
             key={st.type}
@@ -74,8 +74,8 @@ export default function PathExplorer() {
               setI(j);
               setAuto(false);
             }}
-            className={`flex h-11 items-center justify-center gap-2 rounded-[12px] px-3 text-[14px] font-semibold transition-colors ${
-              j === i ? "bg-foreground text-surface" : "text-muted hover:bg-sunken hover:text-foreground"
+            className={`flex h-11 items-center justify-center gap-2 rounded-full px-3 text-[14px] font-semibold transition-colors ${
+              j === i ? "bg-foreground text-surface" : "text-muted hover:bg-soft-2 hover:text-foreground"
             }`}
           >
             <span

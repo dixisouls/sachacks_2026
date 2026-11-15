@@ -53,7 +53,7 @@ export default function Home() {
             <Link
               key={d.disease_id}
               href={`/d/${d.disease_id}`}
-              className="inline-flex h-9 items-center gap-2 rounded-full border border-line bg-surface px-3.5 font-semibold transition-colors hover:border-disease"
+              className="inline-flex h-9 items-center gap-2 rounded-full bg-surface px-3.5 font-semibold shadow-soft transition-colors hover:bg-lilac"
             >
               <span className="h-2 w-2 rounded-full bg-disease" />
               {d.name}
@@ -75,8 +75,8 @@ export default function Home() {
         <SectionHead title="Three steps, about a minute." />
         <ol className="grid gap-4 md:grid-cols-3">
           {STEPS.map(([t, d], i) => (
-            <li key={t} className="flex flex-col items-center rounded-[20px] border border-line bg-surface/60 px-6 py-8 text-center">
-              <span className="grid h-10 w-10 place-items-center rounded-full bg-foreground text-[16px] font-bold text-surface">{i + 1}</span>
+            <li key={t} className="flex flex-col items-center rounded-[28px] bg-surface px-6 py-8 text-center shadow-soft">
+              <span className="grid h-10 w-10 place-items-center rounded-full bg-mint text-[16px] font-bold text-accent-ink">{i + 1}</span>
               <h3 className="mt-4 text-[19px] font-bold tracking-[-0.02em]">{t}</h3>
               <p className="mt-2 max-w-[260px] text-[15px] leading-relaxed text-muted">{d}</p>
             </li>
@@ -105,7 +105,7 @@ export default function Home() {
         <SectionHead title="Hide what we know. See if it comes back.">
           We removed 20% of known approved treatments from the graph and asked it to rank them back.
         </SectionHead>
-        <div className="grid divide-line rounded-[24px] border border-line bg-surface max-md:divide-y md:grid-cols-3 md:divide-x">
+        <div className="grid rounded-[32px] bg-surface shadow-float md:grid-cols-3">
           <Stat value={ours != null ? `${(ours * 100).toFixed(1)}%` : "…"} label="of hidden treatments come back in the top 10" accent />
           <Stat value={ours != null && pop ? `${(ours / pop).toFixed(1)}×` : "…"} label="better than ranking by popularity" />
           <Stat value={ours != null && rnd ? `${Math.round(ours / rnd)}×` : "…"} label="better than picking at random" />
