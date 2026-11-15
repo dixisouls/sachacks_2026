@@ -41,6 +41,8 @@ PER_ROUND = 4
 # same budget (see the note in api/brief.py). Designing is harder than
 # summarising, so the budget is far larger here.
 MAX_OUTPUT_TOKENS = 32768
+# Keep the event stream from going quiet long enough for a proxy to hang up.
+HEARTBEAT_S = 15
 
 SYSTEM = """You are a medicinal chemist designing a new small molecule, one round at a time.
 
@@ -215,6 +217,7 @@ async def stream(job_id: str, request: Request, since: int = 0) -> StreamingResp
 
     async def events() -> AsyncIterator[str]:
         sent = since
+        last = time.monotonic()
         while True:
             if await request.is_disconnected():
                 return
@@ -224,10 +227,17 @@ async def stream(job_id: str, request: Request, since: int = 0) -> StreamingResp
             while sent < len(job["events"]):
                 event = job["events"][sent]
                 sent += 1
+                last = time.monotonic()
                 yield f"id: {event['i']}\ndata: {json.dumps(event)}\n\n"
             if job["status"] != "running":
                 yield f"data: {json.dumps({'type': 'end', 'status': job['status']})}\n\n"
                 return
+            # A proxy that sees nothing for long enough will close the connection:
+            # Heroku's router gives up after 55 seconds. A model can easily think
+            # for longer than that before its first token, so say something.
+            if time.monotonic() - last > HEARTBEAT_S:
+                last = time.monotonic()
+                yield ": still running\n\n"
             await asyncio.sleep(0.25)
 
     return StreamingResponse(events(), media_type="text/event-stream",
