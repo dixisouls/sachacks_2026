@@ -95,13 +95,14 @@ class Scorer:
         self.Tn = _degree_normalize(T, damping)
         self.Mn = _degree_normalize(M, damping).tocsc()
 
-        sib = (H.T @ H).tocsr()  # child x child through a shared parent
-        sib.setdiag(0)
-        sib.eliminate_zeros()
-        sib.data[:] = 1.0
-        self.Sib = sib.tocsc()
+        # Siblings (child x child through a shared parent) are computed one column
+        # at a time in sib_column(). The whole matrix is H.T @ H, and two parents
+        # here have 5,680 and 6,511 children: a parent with k children contributes
+        # k squared entries, so the product is 81.6 million of them and 650 MB of
+        # arrays, to hold something a single query reads one column of.
         self.children = H  # csr: row = parent
         self.parents = H.tocsc()  # csc: column = child
+        self.n_diseases = H.shape[0]
 
         # optional similarity layers
         self.C = self.Cn = None
@@ -207,12 +208,27 @@ class Scorer:
                     info.off_label.add(di)
         return info
 
+    def sib_column(self, j: int) -> sp.csc_matrix:
+        """Diseases sharing a parent with disease `j`, as a column of ones.
+
+        The same answer the full sibling matrix gave, without building it.
+        """
+        parents = self.parents[:, j].indices
+        if parents.size == 0:
+            return sp.csc_matrix((self.n_diseases, 1), dtype=np.float32)
+        kin = np.unique(np.concatenate([self.children[int(p)].indices for p in parents]))
+        kin = kin[kin != j]  # a disease is not its own sibling
+        return sp.csc_matrix(
+            (np.ones(kin.size, dtype=np.float32), (kin, np.zeros(kin.size, dtype=np.int32))),
+            shape=(self.n_diseases, 1),
+        )
+
     # --------------------------------------------------------------- scoring
     def score_column(self, j: int) -> dict:
         """All four components for one disease, plus the intermediates paths need."""
         mcol = self.Mn[:, j]                                   # genes x 1
         a_raw = np.asarray((self.Tn @ mcol).todense()).ravel()  # drugs
-        b_raw = np.asarray((self.I @ self.Sib[:, j]).todense()).ravel().astype(np.float64)
+        b_raw = np.asarray((self.I @ self.sib_column(j)).todense()).ravel().astype(np.float64)
 
         c_raw = np.zeros_like(a_raw)
         if self.Cn is not None:
@@ -403,7 +419,7 @@ class Scorer:
 
         # --- B: sibling disease
         treated = set(self.I[d].indices.tolist())
-        for s in [int(x) for x in self.Sib[:, j].indices if int(x) in treated][:3]:
+        for s in [int(x) for x in self.sib_column(j).indices if int(x) in treated][:3]:
             sid = self.disease_id[s]
             nodes.setdefault(sid, {"id": sid, "type": "disease", "label": self.disease_name[s]})
             edges.append({"source": drug_id, "target": sid, "relation": "INDICATION",
