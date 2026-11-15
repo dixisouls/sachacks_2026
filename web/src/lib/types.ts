@@ -181,3 +181,100 @@ export interface Comparison {
   right: MoleculeImage;
   caption: string;
 }
+
+/** POST /api/design (api/design.py): a molecule designed from a ranked drug. */
+export type CheckStatus = "pass" | "warn" | "fail";
+
+export interface DesignCheck {
+  id: string;
+  label: string; // names the good outcome, e.g. "A chemist could make it"
+  status: CheckStatus;
+  value: string; // the number it judged on, e.g. "3.4 of 10"
+  detail: string;
+  problem: string; // names what went wrong, used when status is not "pass"
+}
+
+export interface DesignEvaluation {
+  smiles: string;
+  valid: boolean;
+  status: CheckStatus;
+  summary: string;
+  checks: DesignCheck[];
+  properties: {
+    formula?: string;
+    mol_weight?: number;
+    logp?: number;
+    tpsa?: number;
+    hbd?: number;
+    hba?: number;
+    rotatable_bonds?: number;
+    heavy_atoms?: number;
+    rings?: number;
+    qed?: number;
+    sa_score?: number;
+    parent_similarity?: number;
+    nearest_drug?: { drug_id: string; name: string; similarity: number };
+  };
+}
+
+export interface DesignAttempt {
+  id: string;
+  round: number;
+  name: string;
+  rationale: string;
+  builds_on: string;
+  check: DesignEvaluation;
+}
+
+/** One line of the run, as it happened. `i` is the replay index. */
+export interface DesignEvent {
+  i: number;
+  type:
+    | "phase"
+    | "context"
+    | "round"
+    | "thinking" // the reasoning so far, resent as it grows
+    | "reasoning"
+    | "molecule"
+    | "verdict"
+    | "note"
+    | "best"
+    | "done"
+    | "error"
+    | "end"; // stream only: the run stopped, nothing follows
+  at: number; // seconds since the run started
+  text?: string;
+  n?: number;
+  of?: number;
+  round?: number;
+  id?: string;
+  name?: string;
+  smiles?: string;
+  rationale?: string;
+  builds_on?: string;
+  status?: CheckStatus;
+  summary?: string;
+  check?: DesignEvaluation;
+  targets?: string[];
+  parent?: { name: string; smiles: string };
+  tried?: number;
+  accepted?: number;
+}
+
+export interface DesignJob {
+  job_id: string;
+  status: "running" | "done" | "error";
+  drug_id: string;
+  disease_id: string;
+  events: DesignEvent[];
+  attempts: DesignAttempt[];
+  best: DesignAttempt | null;
+  error: string | null;
+  cached: boolean;
+}
+
+export interface DesignStart {
+  job_id: string;
+  status: DesignJob["status"];
+  cached: boolean;
+}

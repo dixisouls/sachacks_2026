@@ -8,6 +8,7 @@ import { drugLabel, PATH_HINT, PATH_LABEL, softenNames, titleCase } from "@/lib/
 import type { Candidate, DiseaseSummary, Path, PathNode, PathsResponse, PathType } from "@/lib/types";
 import BriefView from "./BriefView";
 import Chain, { type ChainLink, type ChainNode } from "./Chain";
+import DesignPanel from "./DesignPanel";
 import ErrorCard from "./ErrorCard";
 import LookAlikeCompare, { type Analog } from "./LookAlikeCompare";
 import PathGraph from "./PathGraph";
@@ -15,7 +16,7 @@ import ReadinessBadge from "./ReadinessBadge";
 import ScoreMeter from "./ScoreMeter";
 import StructurePanel from "./StructurePanel";
 
-type Tab = "why" | "evidence" | "structure";
+type Tab = "why" | "evidence" | "structure" | "design";
 
 /** One path from the API as chain nodes and labelled links. */
 function toChain(p: Path, data: PathsResponse): { nodes: ChainNode[]; links: ChainLink[] } {
@@ -104,10 +105,11 @@ export default function DetailPanel({
   };
 
   const nReasons = paths.data?.paths.length;
-  const tabs: { key: Tab; label: string; note?: string; busy?: boolean }[] = [
+  const tabs: { key: Tab; label: string; note?: string; tag?: string; busy?: boolean }[] = [
     { key: "why", label: "Why it's here", note: nReasons != null ? String(nReasons) : undefined },
     { key: "evidence", label: "Evidence", busy: brief.isLoading },
     { key: "structure", label: "3D structure" },
+    { key: "design", label: "Design new", tag: "AI" },
   ];
 
   return (
@@ -180,7 +182,7 @@ export default function DetailPanel({
 
       {/* tabs: three equal parts */}
       <div className="px-5 pt-5 sm:px-8">
-        <div role="tablist" aria-label="Details" className="grid grid-cols-3 gap-1 rounded-full bg-soft p-1 text-[13.5px] font-semibold sm:text-[14px]">
+        <div role="tablist" aria-label="Details" className="grid grid-cols-2 gap-1 rounded-full bg-soft p-1 text-[13.5px] font-semibold sm:grid-cols-4 sm:text-[14px]">
           {tabs.map((t) => (
             <button
               key={t.key}
@@ -193,6 +195,11 @@ export default function DetailPanel({
             >
               <span className="truncate">{t.label}</span>
               {t.note && <span className="rounded-full bg-accent-soft px-1.5 text-[11.5px] tabular-nums text-accent-ink max-sm:hidden">{t.note}</span>}
+              {t.tag && (
+                <span className="rounded-full bg-[#FBEFD9] px-1.5 text-[10.5px] font-bold text-[#6B4A06]" title="Proposes a molecule that does not exist yet">
+                  {t.tag}
+                </span>
+              )}
               {t.busy && <span aria-label="Loading" className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" />}
             </button>
           ))}
@@ -279,6 +286,10 @@ export default function DetailPanel({
 
         {tab === "structure" && (
           <StructurePanel drugId={drugId} diseaseId={diseaseId} gene={selectedGene} genes={genes} onGeneChange={setGene} />
+        )}
+
+        {tab === "design" && (
+          <DesignPanel drugId={drugId} diseaseId={diseaseId} drugName={name} diseaseName={disease.name} />
         )}
 
         {tab === "evidence" && (
