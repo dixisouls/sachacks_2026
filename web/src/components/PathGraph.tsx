@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Core, ElementDefinition } from "cytoscape";
 import { kgKey, titleCase } from "@/lib/format";
 import type { PathsResponse } from "@/lib/types";
@@ -14,12 +14,26 @@ type Props = {
   onGeneClick: (geneId: string) => void;
 };
 
+/** True on phone-width screens. */
+function useNarrow() {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return narrow;
+}
+
 function cssVar(name: string) {
   return getComputedStyle(document.body).getPropertyValue(name).trim();
 }
 
-/** Left-to-right layers: drug (col 0) → ... → disease (last col). Sibling diseases sit in a row below. */
-function layout(data: PathsResponse, drugId: string, diseaseId: string) {
+/** Wide screens: left-to-right layers, drug (col 0) → ... → disease (last col), sibling diseases in a row below.
+ *  Phones: top-to-bottom layers with at most 3 nodes per row, so labels stay readable instead of shrinking to fit. */
+function layout(data: PathsResponse, drugId: string, diseaseId: string, vertical: boolean) {
   const out = new Map<string, string[]>();
   for (const e of data.edges) {
     if (e.target === drugId) continue;
@@ -48,8 +62,24 @@ function layout(data: PathsResponse, drugId: string, diseaseId: string) {
     const d = depth.get(n.id)!;
     cols.set(d, [...(cols.get(d) ?? []), n.id]);
   }
-  const X = 240, Y = 64;
   const pos: Record<string, { x: number; y: number }> = {};
+  if (vertical) {
+    const PER_ROW = 3, DX = 112, DY = 84, GAP = 56;
+    const layers = [...cols.entries()].sort(([a], [b]) => a - b).map(([, ids]) => ids);
+    if (siblings.size) layers.splice(layers.length - 1, 0, [...siblings]); // siblings just above the disease
+    let y = 0;
+    for (const ids of layers) {
+      for (let r = 0; r * PER_ROW < ids.length; r++) {
+        const row = ids.slice(r * PER_ROW, (r + 1) * PER_ROW);
+        row.forEach((id, i) => (pos[id] = { x: (i - (row.length - 1) / 2) * DX, y }));
+        y += DY;
+      }
+      y += GAP;
+    }
+    const height = Math.max(380, Math.min(1000, y * 0.85 + 60));
+    return { pos, height };
+  }
+  const X = 240, Y = 64;
   let maxRows = 1;
   for (const [d, ids] of cols) {
     maxRows = Math.max(maxRows, ids.length);
@@ -70,7 +100,8 @@ export default function PathGraph({ data, drugId, diseaseId, highlight, selected
   const cyRef = useRef<Core | null>(null);
   const onGeneRef = useRef(onGeneClick);
   onGeneRef.current = onGeneClick;
-  const { pos, height } = useMemo(() => layout(data, drugId, diseaseId), [data, drugId, diseaseId]);
+  const vertical = useNarrow();
+  const { pos, height } = useMemo(() => layout(data, drugId, diseaseId, vertical), [data, drugId, diseaseId, vertical]);
   const highlightRef = useRef(highlight);
   const selectedRef = useRef(selectedGene);
 
@@ -139,14 +170,14 @@ export default function PathGraph({ data, drugId, diseaseId, highlight, selected
             selector: "node",
             style: {
               label: "data(label)",
-              "font-size": 13,
+              "font-size": vertical ? 15 : 13,
               "font-family": font,
               "font-weight": 600,
               color: fg,
               "text-valign": "bottom",
               "text-margin-y": 8,
               "text-wrap": "wrap",
-              "text-max-width": "140px",
+              "text-max-width": vertical ? "96px" : "140px",
               width: 28,
               height: 28,
               shape: "ellipse",
@@ -156,7 +187,7 @@ export default function PathGraph({ data, drugId, diseaseId, highlight, selected
           { selector: "node[type='drug']", style: { "background-color": cssVar("--drug") } },
           { selector: "node[type='gene']", style: { "background-color": cssVar("--gene") } },
           { selector: "node[type='disease']", style: { "background-color": cssVar("--disease") } },
-          { selector: "node[main=1]", style: { width: 46, height: 46, "font-weight": 800, "font-size": 15 } },
+          { selector: "node[main=1]", style: { width: 46, height: 46, "font-weight": 800, "font-size": vertical ? 17 : 15 } },
           { selector: "node[type='gene']", style: { "font-family": mono + ", monospace", "font-weight": 500 } },
           { selector: "node.selected-gene", style: { "border-color": cssVar("--mint"), "border-width": 7 } },
           {
@@ -170,7 +201,7 @@ export default function PathGraph({ data, drugId, diseaseId, highlight, selected
               "control-point-distances": "data(bend)",
               "control-point-weights": 0.5,
               opacity: 0.4,
-              label: "data(label)",
+              label: vertical ? "" : "data(label)",
               "font-size": 11,
               "font-family": font,
               color: muted,
@@ -197,7 +228,7 @@ export default function PathGraph({ data, drugId, diseaseId, highlight, selected
     return () => {
       cancelled = true;
     };
-  }, [data, drugId, diseaseId, pos]);
+  }, [data, drugId, diseaseId, pos, vertical]);
 
   // Destroy cytoscape while its container is still attached. A passive-effect cleanup runs after React
   // has removed the DOM node, and destroying a detached instance hangs the renderer.
@@ -206,7 +237,7 @@ export default function PathGraph({ data, drugId, diseaseId, highlight, selected
       cyRef.current?.destroy();
       cyRef.current = null;
     },
-    [data, drugId, diseaseId],
+    [data, drugId, diseaseId, vertical],
   );
 
   // highlight a KG edge cited in the brief, and ring the selected gene.
