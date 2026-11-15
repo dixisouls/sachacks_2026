@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { drugLabel, PATH_LABEL, PATH_SHORT } from "@/lib/format";
 import type { Candidate } from "@/lib/types";
 import ReadinessDot from "./ReadinessDot";
 import ScoreRing from "./ScoreRing";
+
+/** On phones only the first few rows show, with "Show more" below. Desktop always shows every row. */
+const PHONE_STEP = 6;
 
 export default function CandidateList({
   items,
@@ -17,13 +21,18 @@ export default function CandidateList({
   selected?: string;
   empty: string;
 }) {
+  // start with the selected drug in view, even when it ranks below the first page
+  const selIndex = items.findIndex((c) => c.drug_id === selected);
+  const [shown, setShown] = useState(() => Math.max(PHONE_STEP, Math.ceil((selIndex + 1) / PHONE_STEP) * PHONE_STEP));
   if (!items.length) return <p className="px-3 py-8 text-[15px] text-muted">{empty}</p>;
+  const remaining = items.length - shown;
   return (
+    <>
     <ol className="flex flex-col gap-1">
-      {items.map((c) => {
+      {items.map((c, i) => {
         const isSel = c.drug_id === selected;
         return (
-          <li key={c.drug_id}>
+          <li key={c.drug_id} className={i >= shown ? "hidden sm:block" : undefined}>
             <Link
               href={`/d/${encodeURIComponent(diseaseId)}/${encodeURIComponent(c.drug_id)}`}
               scroll={false}
@@ -67,5 +76,19 @@ export default function CandidateList({
         );
       })}
     </ol>
+    {remaining > 0 && (
+      <button
+        type="button"
+        onClick={() => setShown((n) => n + PHONE_STEP)}
+        className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-surface text-[15px] font-bold shadow-soft transition-colors hover:bg-soft-2 sm:hidden"
+      >
+        Show more
+        <span className="font-normal text-muted">({remaining} more)</span>
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24">
+          <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+    )}
+    </>
   );
 }
