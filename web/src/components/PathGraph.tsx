@@ -154,7 +154,7 @@ export default function PathGraph({ data, drugId, diseaseId, highlight, selected
 
       const fg = cssVar("--foreground"), muted = cssVar("--muted"), field = cssVar("--field");
       const font = getComputedStyle(document.body).fontFamily;
-      const mono = cssVar("--font-plex-mono") || "monospace";
+      const mono = cssVar("--font-jetbrains") || "monospace";
       const cy = cytoscape({
         container: ref.current,
         elements: els,

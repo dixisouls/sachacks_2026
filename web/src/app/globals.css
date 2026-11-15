@@ -1,40 +1,37 @@
 @import "tailwindcss";
 
 /*
-  Chain theme. Every screen reads left to right: drug → gene → disease.
-  The three entity colours mean exactly that and nothing else; cobalt is for
-  things you can act on (links, scores, focus); ink is for primary buttons.
+  Flow theme: soft, organic, mostly borderless. Every screen still reads left
+  to right: drug → gene → disease, and those three colours mean only that.
 */
 :root {
-  --background: #f3f5f9;
+  --background: #f1f4f2;
   --surface: #ffffff;
-  --sunken: #eaedf3;
-  --foreground: #16203a;
-  --muted: #4b5570;
-  --faint: #7a839a;
-  --line: #dfe3ec;
-  --line-strong: #c9cfdc;
+  --foreground: #10231e;
+  --muted: #4e615b;
+  --faint: #6f807a;
+  --soft: #e2e9e5;
+  --soft-2: #eef2f0;
+  --field: #f6f8f7;
+  --border: #dce5e0;
+  --accent: #0b7a69;
+  --accent-ink: #0a5a4e;
+  --drug: #d9573a;
+  --gene: #0b7a69;
+  --disease: #6a55d8;
+  --mint: #dcebe5;
+  --lilac: #e6e1f7;
+  --peach: #f7e3da;
+  --shadow: 16, 35, 30;
 
-  --accent: #2f45c6;
-  --accent-ink: #22339a;
-  --accent-soft: #e6e9fa;
-
-  --drug: #e07020;
-  --drug-soft: #fbe9dc;
-  --gene: #0e9384;
-  --gene-soft: #dcf1ee;
-  --disease: #a63c86;
-  --disease-soft: #f5e3ef;
-
-  /* kept for older class names */
-  --soft: var(--sunken);
-  --soft-2: #f0f2f7;
-  --field: #f6f7fa;
-  --border: var(--line);
-  --mint: var(--gene-soft);
-  --lilac: var(--disease-soft);
-  --peach: var(--drug-soft);
-  --shadow: 22, 32, 58;
+  /* newer token names, mapped onto the same palette */
+  --sunken: var(--soft);
+  --line: var(--border);
+  --line-strong: #c8d4ce;
+  --accent-soft: #dcefe8;
+  --drug-soft: var(--peach); /* the original #e9967e lives on as a node fill */
+  --gene-soft: var(--mint);
+  --disease-soft: var(--lilac);
 }
 
 @theme inline {
@@ -62,8 +59,8 @@
   --color-mint: var(--mint);
   --color-lilac: var(--lilac);
   --color-peach: var(--peach);
-  --font-sans: var(--font-schibsted);
-  --font-mono: var(--font-plex-mono);
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-jetbrains);
 }
 
 html {
@@ -72,7 +69,6 @@ html {
 body {
   background: var(--background);
   color: var(--foreground);
-  font-feature-settings: "ss01", "cv11";
 }
 
 ::selection {
