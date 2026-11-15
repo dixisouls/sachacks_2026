@@ -65,7 +65,7 @@ export default function Validation() {
               </p>
 
               {ours && (
-                <div className="mt-12 grid grid-cols-2 gap-px overflow-hidden rounded-[24px] border border-line bg-line md:grid-cols-4">
+                <div className="mt-12 grid grid-cols-2 rounded-[32px] bg-surface shadow-float md:grid-cols-4">
                   <Stat value={`${(ours["hits@10"] * 100).toFixed(1)}%`} label="of hidden treatments come back in the top 10" accent />
                   {pop && <Stat value={`${(ours["hits@10"] / pop["hits@10"]).toFixed(1)}×`} label="better than ranking by popularity" />}
                   {rnd && <Stat value={`${Math.round(ours["hits@10"] / rnd["hits@10"])}×`} label="better than picking at random" />}
@@ -84,13 +84,13 @@ export default function Validation() {
                       </span>
                     ))}
                   </div>
-                  <div className="ml-auto inline-flex gap-1 rounded-[12px] bg-sunken p-1 text-[13px] font-semibold">
+                  <div className="ml-auto inline-flex gap-1 rounded-full bg-soft p-1 text-[13px] font-semibold">
                     {(["chart", "table"] as const).map((v) => (
                       <button
                         key={v}
                         onClick={() => setView(v)}
                         aria-pressed={view === v}
-                        className={`h-8 rounded-[9px] px-4 capitalize ${view === v ? "bg-surface text-foreground shadow-soft" : "text-muted"}`}
+                        className={`h-8 rounded-full px-4 capitalize ${view === v ? "bg-surface text-foreground shadow-soft" : "text-muted"}`}
                       >
                         {v}
                       </button>
@@ -219,7 +219,7 @@ function order(m: string) {
 
 function Stat({ value, label, accent = false }: { value: string; label: string; accent?: boolean }) {
   return (
-    <div className="flex flex-col items-center bg-surface px-4 py-8 text-center">
+    <div className="flex flex-col items-center px-4 py-8 text-center">
       <div className={`text-[clamp(36px,4.6vw,52px)] font-extrabold leading-none tabular-nums tracking-[-0.045em] ${accent ? "text-accent" : ""}`}>{value}</div>
       <p className="mt-2.5 max-w-[180px] text-[14px] leading-snug text-muted">{label}</p>
     </div>
@@ -228,7 +228,7 @@ function Stat({ value, label, accent = false }: { value: string; label: string; 
 
 function Note({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-[20px] border border-line bg-surface/60 p-6">
+    <div className="rounded-[28px] bg-surface p-6 shadow-soft">
       <h3 className="text-[17px] font-bold tracking-[-0.015em]">{title}</h3>
       <p className="mt-2 text-[15px] leading-relaxed text-muted">{children}</p>
     </div>
