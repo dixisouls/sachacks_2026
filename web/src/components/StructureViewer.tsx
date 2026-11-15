@@ -1,6 +1,6 @@
-// Mount (for DetailPanel): const StructureViewer = lazy(() => import("./StructureViewer"));
-//   <Suspense fallback={null}><StructureViewer drugId={drugId} geneId={selectedGeneId} /></Suspense>
-// Needs a QueryClientProvider above it, VITE_API_URL set, and: npm i --save-exact 3dmol@2.5.5 smiles-drawer@2.4.1
+"use client";
+// Mounted by StructurePanel, client-only: dynamic(() => import("./StructureViewer"), { ssr: false }),
+// since 3Dmol needs WebGL and `window`. Needs a QueryClientProvider above it and NEXT_PUBLIC_API_URL set.
 //
 // 3D structure for one (drug, gene) pair, architecture.md §9.3–9.4.
 // Data: GET /api/structures?drug_id=&gene_id= → StructurePlan (api/structures.py).
@@ -39,7 +39,7 @@ export interface StructurePlan {
   caption: string;
 }
 
-const API = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+const API = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 
 async function fetchPlan(drugId: string, geneId: string): Promise<StructurePlan> {
   const q = new URLSearchParams({ drug_id: drugId, gene_id: geneId });
@@ -174,19 +174,20 @@ function Smiles2D({ smiles, className }: { smiles: string; className?: string })
 
   useEffect(() => {
     let cancelled = false;
+    const el = svg.current;
     setFailed(false);
     import("smiles-drawer").then(({ default: SmilesDrawer }) => {
-      if (cancelled || !svg.current) return;
+      if (cancelled || !el) return;
       const drawer = new SmilesDrawer.SvgDrawer({ width: 320, height: 240 });
       SmilesDrawer.parse(
         smiles,
-        (tree) => !cancelled && svg.current && drawer.draw(tree, svg.current, "light"),
+        (tree) => !cancelled && drawer.draw(tree, el, "light"),
         () => !cancelled && setFailed(true),
       );
     });
     return () => {
       cancelled = true;
-      svg.current?.replaceChildren();
+      el?.replaceChildren();
     };
   }, [smiles]);
 
@@ -214,10 +215,12 @@ function PlddtLegend() {
 }
 
 function useIsNarrow(query = "(max-width: 639px)") {
-  const [narrow, setNarrow] = useState(() => window.matchMedia(query).matches);
+  // `window` doesn't exist during server rendering: start wide, read the real value after mount.
+  const [narrow, setNarrow] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia(query);
     const onChange = () => setNarrow(mq.matches);
+    onChange();
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, [query]);
@@ -391,7 +394,7 @@ export default function StructureViewer({ drugId, geneId }: StructureViewerProps
         {plan.caption}
         {mode === "BOUND" && plan.ligand_match === "stereo_relaxed" && (
           <span className="block text-gray-500">
-            PDB ligand {plan.ligand_comp_id} matches {drug.name}'s structure; stereochemistry not compared.
+            PDB ligand {plan.ligand_comp_id} matches {drug.name}&apos;s structure; stereochemistry not compared.
           </span>
         )}
         {mode === "SEPARATE" && (

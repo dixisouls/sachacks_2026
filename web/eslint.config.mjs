@@ -18,8 +18,6 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
-      // TEMP: Vite version of the 3D viewer, being ported to Next.js. Remove when it lands.
-      "src/components/StructureViewer.tsx",
     ],
   },
 ];

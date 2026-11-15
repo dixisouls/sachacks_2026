@@ -11,7 +11,7 @@ import ErrorCard from "./ErrorCard";
 import LookAlikeCompare, { type Analog } from "./LookAlikeCompare";
 import PathGraph from "./PathGraph";
 import ReadinessBadge from "./ReadinessBadge";
-import StructurePlaceholder from "./StructurePlaceholder";
+import StructurePanel from "./StructurePanel";
 
 type Tab = "path" | "structure" | "brief";
 
@@ -167,7 +167,7 @@ export default function DetailPanel({
           ))}
 
         {tab === "structure" && (
-          <StructurePlaceholder drugId={drugId} diseaseId={diseaseId} gene={selectedGene} genes={genes} onGeneChange={setGene} />
+          <StructurePanel drugId={drugId} diseaseId={diseaseId} gene={selectedGene} genes={genes} onGeneChange={setGene} />
         )}
 
         {tab === "brief" && (
