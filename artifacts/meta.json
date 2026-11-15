@@ -1,0 +1,42 @@
+{
+  "built_at": "2026-11-15T10:26:04",
+  "min_evidence": 0.1,
+  "shapes": {
+    "T": [
+      13911,
+      19608
+    ],
+    "M": [
+      19608,
+      36740
+    ],
+    "H": [
+      36740,
+      36740
+    ],
+    "I": [
+      13911,
+      36740
+    ]
+  },
+  "nnz": {
+    "T": 34059,
+    "M": 1842190,
+    "H": 47744,
+    "I": 51450
+  },
+  "n_approved_drugs": 2924,
+  "chem": {
+    "nnz": 10716,
+    "min_tanimoto": 0.55,
+    "top_k": 15,
+    "drugs_with_a_look_alike": 3649
+  },
+  "homology": {
+    "nnz": 7519,
+    "min_identity": 0.4,
+    "max_evalue": 1e-10,
+    "top_k": 10,
+    "targets_with_a_homolog": 2155
+  }
+}

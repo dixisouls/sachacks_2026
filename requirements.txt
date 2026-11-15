@@ -1,0 +1,15 @@
+# core
+numpy>=2.0
+scipy>=1.13
+polars>=1.0
+requests>=2.31
+
+# graph download (scripts/build_artifacts.py, first run only)
+optimuskg>=1.0
+
+# chemical similarity (scripts/build_similarity.py)
+rdkit>=2024.3
+
+# The protein sequence layer also needs the `mmseqs` binary at build time:
+#   macOS/Linux:  brew install mmseqs2     or  conda install -c bioconda mmseqs2
+# Not needed to run the app: artifacts/S.npz is committed.
