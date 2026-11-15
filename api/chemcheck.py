@@ -38,6 +38,13 @@ _FPGEN = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
 
 Status = Literal["pass", "warn", "fail"]
 
+# What passing is worth. Measured, not guessed: 200 molecules drawn at random from
+# artifacts/drugs.parquet were put through evaluate() and 163 cleared every check.
+# These tests ask whether something is a plausible small molecule, not whether it
+# suits a particular protein, and a molecule clearing them has only cleared the
+# bar that most molecules clear. Reproduce with scripts/filter_baseline.py.
+RANDOM_PASS_RATE = 163 / 200
+
 
 def _catalog(which: str) -> FilterCatalog.FilterCatalog:
     params = FilterCatalog.FilterCatalogParams()
@@ -138,12 +145,16 @@ def _check(cid: str, label: str, status: Status, value: str, detail: str,
 
 
 def evaluate(smiles: str, parent_smiles: str | None = None,
-             parent_name: str | None = None) -> dict[str, Any]:
+             parent_name: str | None = None, known_drug: bool = False) -> dict[str, Any]:
     """Run every check on one proposed molecule.
 
     Returns the canonical structure, the descriptors, and a list of checks each
     carrying the number it judged on. `status` is the worst check: a molecule
     that fails anything is a fail, one that only warns is a warn.
+
+    Set `known_drug` when scoring a drug that already exists, such as the one a
+    design started from. Being an existing molecule is then the point rather
+    than a failure, so the novelty test reports without condemning.
     """
     mol = MolFromSmiles(smiles)
     if mol is None:
@@ -260,7 +271,12 @@ def evaluate(smiles: str, parent_smiles: str | None = None,
     _, _, keys, _ = _known_drugs()
     nearest = _nearest_known(mol)
     exact = skeleton and skeleton in keys
-    if exact and nearest:
+    if known_drug and nearest:
+        checks.append(_check(
+            "novel", "Already a known drug", "pass", nearest[1].title(),
+            f"This is {nearest[1].title()}, which is the point: it is the drug being designed from.",
+        ))
+    elif exact and nearest:
         checks.append(_check(
             "novel", "A new molecule", "fail", f"same as {nearest[1].title()}",
             f"This is {nearest[1].title()}, a drug already in the database. The model recited an "

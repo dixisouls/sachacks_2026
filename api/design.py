@@ -66,6 +66,9 @@ Rules, in order of importance:
    mistake twice. If weight was the problem, come back lighter.
 5. Explain each molecule in one or two plain sentences: what you changed, and
    what you expect that change to buy. Write for a researcher, not a chemist.
+6. Passing the checks is a low bar: most random molecules pass them, and so does
+   the drug you are starting from. Clearing them is not success. Aim at a real
+   weakness of the starting drug and say which one you are aiming at.
 
 You are proposing hypotheses for a chemist to consider. Nothing you design has
 been made or tested, and you must not imply otherwise."""
@@ -233,7 +236,8 @@ async def stream(job_id: str, request: Request, since: int = 0) -> StreamingResp
 
 def _public(job: dict[str, Any]) -> dict[str, Any]:
     return {k: job[k] for k in
-            ("job_id", "status", "drug_id", "disease_id", "events", "attempts", "best", "error", "cached")
+            ("job_id", "status", "drug_id", "disease_id", "events", "attempts", "best",
+             "parent", "random_pass_rate", "error", "cached")
             if k in job}
 
 
@@ -379,7 +383,16 @@ async def _run(job_id: str) -> None:
         await asyncio.to_thread(chemcheck.warm)
 
         context = await asyncio.to_thread(build_context, job["drug_id"], job["disease_id"])
-        job["parent"] = {"name": context["parent_name"], "smiles": context["parent_smiles"]}
+        # Score the starting drug on the same checks. Without it there is nothing to
+        # judge a design against, and "passes every check" sounds like an achievement
+        # when the approved drug it came from passes them too.
+        baseline = await asyncio.to_thread(
+            chemcheck.evaluate, context["parent_smiles"], None, None, True)
+        job["parent"] = {"name": context["parent_name"], "smiles": context["parent_smiles"],
+                         "check": baseline}
+        job["random_pass_rate"] = round(chemcheck.RANDOM_PASS_RATE, 3)
+        _emit(job, "baseline", name=context["parent_name"], check=baseline,
+              text=f"{context['parent_name']} itself: {baseline['summary'].lower()}")
         _emit(job, "context",
               text=f"Studied {context['parent_name']}, {context['n_approved']} approved and "
                    f"{context['n_investigational']} not-approved drugs for {context['disease_name']}, "

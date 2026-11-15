@@ -8,13 +8,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { designStreamUrl, getDesign, startDesign, USE_MOCKS } from "@/lib/api";
-import type { DesignAttempt, DesignEvent, DesignJob, CheckStatus } from "@/lib/types";
+import type { CheckStatus, DesignAttempt, DesignEvaluation, DesignEvent, DesignJob } from "@/lib/types";
 import ErrorCard from "./ErrorCard";
 import Molecule2D from "./Molecule2D";
 
 const TONE: Record<CheckStatus, { dot: string; chip: string; word: string }> = {
-  pass: { dot: "bg-[#0B7A69]", chip: "bg-mint text-accent-ink", word: "Accepted" },
-  warn: { dot: "bg-[#B07A00]", chip: "bg-[#FBEFD9] text-[#6B4A06]", word: "Flagged" },
+  pass: { dot: "bg-[#0B7A69]", chip: "bg-mint text-accent-ink", word: "Nothing wrong found" },
+  warn: { dot: "bg-[#B07A00]", chip: "bg-[#FBEFD9] text-[#6B4A06]", word: "Questions" },
   fail: { dot: "bg-[#C8452A]", chip: "bg-[#FBE4DE] text-[#8A2A14]", word: "Rejected" },
 };
 
@@ -141,6 +141,10 @@ export default function DesignPanel({
         </section>
       )}
 
+      {(job?.parent?.check || job?.random_pass_rate != null) && (
+        <WhatPassingMeans parent={job?.parent} rate={job?.random_pass_rate} />
+      )}
+
       {attempts.length > 0 && (
         <section aria-labelledby="tried-h">
           <h3 id="tried-h" className="mb-1 text-[18px] font-bold tracking-[-0.015em]">
@@ -235,6 +239,11 @@ function Intro({ drugName, diseaseName, children }: { drugName: string; diseaseN
           After each round RDKit checks them and hands back what was wrong, so the next round is better
           informed. Takes a minute or two.
         </p>
+        <p className="mt-2 max-w-[620px] text-[14px] leading-relaxed text-muted">
+          The checks are a sieve, not a verdict. They catch structures that are not real chemistry,
+          that copy an existing drug, or that no chemist could make. They cannot tell you whether a
+          molecule binds anything, and 82% of random molecules pass them.
+        </p>
       </div>
       {children}
     </div>
@@ -291,6 +300,53 @@ function Progress({ events, running, drugName }: { events: DesignEvent[]; runnin
           <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 animate-pulse bg-accent" />
         </p>
       )}
+    </section>
+  );
+}
+
+/** Passing these checks is a low bar. Saying so beside the result is the only
+ *  way the result means anything: the starting drug clears them, and so does
+ *  most of the drug table. */
+function WhatPassingMeans({
+  parent,
+  rate,
+}: {
+  parent?: { name: string; smiles: string; check?: DesignEvaluation };
+  rate?: number;
+}) {
+  const parentStatus = parent?.check?.status;
+  return (
+    <section aria-labelledby="bar-h" className="rounded-3xl bg-soft-2 p-4 sm:p-5">
+      <h3 id="bar-h" className="text-[16px] font-bold tracking-[-0.015em]">
+        What passing these checks is worth
+      </h3>
+      <dl className="mt-3 grid gap-4 sm:grid-cols-2">
+        {parent?.check && (
+          <div>
+            <dt className="text-[13px] text-muted">The drug it was designed from</dt>
+            <dd className="mt-1 flex items-center gap-2 text-[15px] font-semibold">
+              {parent.name}
+              {parentStatus && <Badge status={parentStatus} />}
+            </dd>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
+              {parentStatus === "pass"
+                ? `${parent.name} is an approved medicine and it clears every check too. A design that only matches it has not improved on anything.`
+                : `${parent.name} does not clear every check itself, so a design that does has at least beaten its starting point on paper.`}
+            </p>
+          </div>
+        )}
+        {rate != null && (
+          <div>
+            <dt className="text-[13px] text-muted">Random unrelated molecules</dt>
+            <dd className="mt-1 text-[15px] font-semibold tabular-nums">{Math.round(rate * 100)}% also pass</dd>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
+              Measured over 200 molecules drawn at random from the drug table. These checks ask whether
+              something is a plausible molecule, not whether it suits this protein. Nothing here tests
+              binding, and nothing here tests safety.
+            </p>
+          </div>
+        )}
+      </dl>
     </section>
   );
 }

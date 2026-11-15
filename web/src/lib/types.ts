@@ -233,6 +233,7 @@ export interface DesignEvent {
     | "phase"
     | "context"
     | "round"
+    | "baseline"
     | "thinking" // the reasoning so far, resent as it grows
     | "reasoning"
     | "molecule"
@@ -256,7 +257,7 @@ export interface DesignEvent {
   summary?: string;
   check?: DesignEvaluation;
   targets?: string[];
-  parent?: { name: string; smiles: string };
+  parent?: { name: string; smiles: string; check?: DesignEvaluation };
   tried?: number;
   accepted?: number;
 }
@@ -269,6 +270,10 @@ export interface DesignJob {
   events: DesignEvent[];
   attempts: DesignAttempt[];
   best: DesignAttempt | null;
+  /** The drug this was designed from, scored on the same checks. */
+  parent?: { name: string; smiles: string; check?: DesignEvaluation };
+  /** Share of random unrelated molecules that also pass every check. */
+  random_pass_rate?: number;
   error: string | null;
   cached: boolean;
 }
