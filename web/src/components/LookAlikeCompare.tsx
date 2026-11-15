@@ -31,7 +31,7 @@ export default function LookAlikeCompare({ drugId, drugName, analogs }: { drugId
   const c = q.data;
 
   return (
-    <section aria-labelledby="lookalike-h" className="rounded-2xl border border-line p-4 sm:p-6">
+    <section aria-labelledby="lookalike-h" className="rounded-3xl bg-soft-2 p-4 sm:p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h3 id="lookalike-h" className="text-[18px] font-bold tracking-[-0.015em]">
           Side by side with its look-alike
@@ -46,8 +46,8 @@ export default function LookAlikeCompare({ drugId, drugName, analogs }: { drugId
               key={a.id}
               aria-pressed={a.id === other.id}
               onClick={() => setPick(a.id)}
-              className={`h-10 rounded-full border px-4 text-sm font-semibold transition-colors ${
-                a.id === other.id ? "border-foreground bg-foreground text-surface" : "border-line bg-surface hover:border-foreground"
+              className={`h-10 rounded-full px-4 text-sm font-semibold transition-colors ${
+                a.id === other.id ? "bg-accent text-white" : "bg-surface hover:bg-soft"
               }`}
             >
               {drugLabel(a.label, a.id)}
@@ -111,7 +111,7 @@ function Molecule({ m, fallback, accent }: { m: MoleculeImage; fallback: string;
   // rendered as an <img> data URI, never injected as markup
   const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(m.svg)}`;
   return (
-    <figure className="m-0 rounded-xl border border-line bg-surface p-3">
+    <figure className="m-0 rounded-2xl bg-surface p-3">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt={`2D structure of ${name}, shared core in grey`} className="mx-auto aspect-[340/260] w-full max-w-[340px]" />
       <figcaption className="mt-1 flex items-center justify-between gap-2 px-1 text-sm">
