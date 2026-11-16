@@ -63,6 +63,11 @@ export default function Validation() {
                 Weights were tuned on one split{e.tuning ? ` (seed ${e.tuning.split_seed})` : ""} and reported on another
                 {e.report_split_seed != null ? ` (seed ${e.report_split_seed})` : ""}, so the numbers are not graded on themselves.
               </p>
+              <p className="mx-auto mt-4 max-w-[640px] text-center text-[15px] leading-relaxed text-muted">
+                This measures the ranking a design starts from, which is the part that can be checked against things
+                already known. The designed molecules themselves cannot be tested this way: they have never been made,
+                so there is no answer to score them against.
+              </p>
 
               {ours && (
                 <div className="mt-12 grid grid-cols-2 rounded-[32px] bg-surface shadow-float md:grid-cols-4">
