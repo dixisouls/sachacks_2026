@@ -78,11 +78,12 @@ export default function Stage({
         )}
       </header>
 
-      {showPocket && molecule && pocketProps ? (
+      {/* Deliberately not keyed on the molecule: picking another one swaps the
+          coordinates inside the same viewer, and the protein is not refetched. */}
+      {showPocket && molecule && pocketProps && pose ? (
         <PoseViewer
-          key={`${pocketProps.pdb_id}-${molecule.id}`}
           pdbId={pocketProps.pdb_id}
-          sdf={pose!}
+          sdf={pose}
           clashes={pocketProps.clashes}
           closestA={pocketProps.closest_A}
           resolutionA={pocket?.resolution_A ?? null}
@@ -93,12 +94,7 @@ export default function Stage({
         <figure className="m-0">
           <div className="grid h-[clamp(320px,48vh,560px)] place-items-center overflow-hidden rounded-[28px] bg-field p-4">
             {molecule?.smiles ? (
-              <Molecule2D
-                smiles={molecule.smiles}
-                width={760}
-                height={520}
-                className="h-full w-full"
-              />
+              <Molecule2D smiles={molecule.smiles} className="h-full w-full" />
             ) : (
               <p className="max-w-[300px] text-center text-[14px] leading-relaxed text-muted">
                 {waiting

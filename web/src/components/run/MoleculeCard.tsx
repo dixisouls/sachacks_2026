@@ -50,7 +50,7 @@ export default function MoleculeCard({
     >
       <div className={`grid h-28 place-items-center overflow-hidden rounded-[18px] bg-field ${rejected ? "opacity-45" : ""}`}>
         {molecule.smiles ? (
-          <Molecule2D smiles={molecule.smiles} width={360} height={240} className="h-full w-full" />
+          <Molecule2D smiles={molecule.smiles} className="h-full w-full" />
         ) : (
           <span className="text-[12px] text-faint">no structure</span>
         )}

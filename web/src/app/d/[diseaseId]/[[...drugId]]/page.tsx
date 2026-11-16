@@ -108,7 +108,10 @@ export default function Results() {
             <button
               key={key}
               role="tab"
+              id={`view-${key}`}
               aria-selected={view === key}
+              aria-controls={`view-panel-${key}`}
+              tabIndex={view === key ? 0 : -1}
               onClick={() => show(key)}
               className={`flex h-11 items-center justify-center gap-2 rounded-full px-3 transition-colors ${
                 view === key ? "bg-surface text-foreground shadow-soft" : "text-muted hover:text-foreground"
@@ -124,10 +127,14 @@ export default function Results() {
           ))}
         </div>
 
-        {view === "design" && <RunView run={run} />}
+        {view === "design" && (
+          <div role="tabpanel" id="view-panel-design" aria-labelledby="view-design">
+            <RunView run={run} />
+          </div>
+        )}
 
         {view === "drugs" && (
-          <>
+          <div role="tabpanel" id="view-panel-drugs" aria-labelledby="view-drugs">
             {q.isError && (
               <div className="mx-auto max-w-xl">
                 <ErrorCard msg="Could not load drugs for this disease." detail={(q.error as Error)?.message} onRetry={() => q.refetch()} />
@@ -185,7 +192,7 @@ export default function Results() {
                 </div>
               </>
             )}
-          </>
+          </div>
         )}
       </div>
       <Footer />
