@@ -190,7 +190,7 @@ absent for job-level events.
 | `verdict` | `track`, `id`, `status`, `summary`, `check` | judged |
 | `note` | `track?`, `text` | anything worth saying |
 | `best` | `track`, `id`, `name` | the track picked its winner |
-| `workup_step` | `track`, `step`, `label`, `status` | a workup section started or finished |
+| `workup_step` | `track`, `step`, `label`, `status`, `text?` | a workup section started or finished |
 | `workup` | `track`, `kind`, `data` | a finished workup section |
 | `track_done` | `track`, `tried`, `accepted` | a track finished |
 | `done` | `tried`, `accepted` | every track finished |
@@ -199,7 +199,10 @@ absent for job-level events.
 
 `workup_step.status` is `"running"` when a section starts and `"done"` or
 `"error"` when it stops. A section that errored sends no `workup` event and
-stays `null` on the track. `workup.kind` is one of `synthesis`, `admet`,
+stays `null` on the track, and its `workup_step` carries `text`: the reason it
+failed, written for a reader rather than for a log. `text` is present only on
+an `"error"` step. Showing it is better than showing a shrug.
+`workup.kind` is one of `synthesis`, `admet`,
 `offtarget`, `case`, and `data` is that key's object, never null.
 
 Rules the frontend can rely on:

@@ -313,3 +313,111 @@ def test_the_public_job_carries_the_three_tracks_and_no_internals(stub):
     for field in ("pool", "label", "blurb", "status", "seed", "studied", "pocket",
                   "proteins", "attempts", "best", "workup", "error"):
         assert field in track, field
+
+
+# ── idempotency, which the page depends on ───────────────────────────────────
+# The disease page POSTs on every mount with force=false, so "never start a
+# second run" is not an optimisation here: if it breaks, every navigation spends
+# nine model calls and the page looks like it is burning money.
+
+@pytest.fixture
+def route(monkeypatch):
+    from api import cache, config, main
+
+    class FakeScorer:
+        disease_idx = {"MONDO_0000001": 0}
+
+    monkeypatch.setitem(main.state, "scorer", FakeScorer())
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(design_disease.config, "have_llm", lambda: True)
+
+    # api.cache.get opens the on-disk envelope itself, so the fake is keyed the
+    # same way the real one is and returns the value, not a wrapper.
+    store: dict[str, object] = {}
+    monkeypatch.setattr(cache, "get", lambda src, key: store.get(key))
+
+    started: list[str] = []
+
+    async def fake_run(job_id):
+        started.append(job_id)
+
+    monkeypatch.setattr(design_disease, "_run_disease", fake_run)
+    return store, started
+
+
+def _post(disease_id="MONDO_0000001", force=False):
+    return _run(design_disease.start_disease(disease_id=disease_id, force=force), timeout=10)
+
+
+def test_posting_twice_does_not_start_a_second_run(route):
+    store, started = route
+    ids = []
+    try:
+        first = _post()
+        second = _post()
+        ids = [first.job_id, second.job_id]
+        assert first.status == "running" and first.cached is False
+        assert second.job_id == first.job_id, "a reload started a second run"
+        assert second.status == "running" and second.cached is False
+        assert started == [first.job_id], "the run was launched twice"
+    finally:
+        for jid in ids:
+            design._jobs.pop(jid, None)
+
+
+def test_a_finished_run_comes_back_cached_under_a_stable_id(route):
+    store, started = route
+    finished = {"job_id": "whatever", "status": "done", "disease_id": "MONDO_0000001",
+                "disease_name": "test disease", "tracks": {}, "events": [],
+                "error": None, "cached": False}
+    store[design_disease._job_key("MONDO_0000001")] = finished
+    try:
+        first, second = _post(), _post()
+        assert first.status == "done" and first.cached is True
+        assert first.job_id.startswith("c")
+        # Stable across calls, and so across restarts: it is a hash of the key.
+        assert second.job_id == first.job_id
+        assert started == [], "a cached run was designed again"
+        assert design._jobs[first.job_id]["kind"] == "disease"
+        assert design._public(design._jobs[first.job_id])["cached"] is True
+    finally:
+        design._jobs.pop(first.job_id, None)
+
+
+def test_force_designs_again_even_with_a_cached_run(route):
+    store, started = route
+    store[design_disease._job_key("MONDO_0000001")] = {
+        "job_id": "x", "status": "done", "disease_id": "MONDO_0000001",
+        "disease_name": "d", "tracks": {}, "events": [], "error": None, "cached": False}
+    forced = None
+    try:
+        forced = _post(force=True)
+        assert forced.status == "running" and forced.cached is False
+        assert not forced.job_id.startswith("c")
+        assert started == [forced.job_id]
+    finally:
+        if forced:
+            design._jobs.pop(forced.job_id, None)
+
+
+def test_the_model_name_is_part_of_the_key(route):
+    before = design_disease._job_key("MONDO_0000001")
+    assert design_disease.config.GEMINI_MODEL in before
+    assert design_disease._job_key("MONDO_0000002") != before
+
+
+def test_two_diseases_do_not_share_a_run(route):
+    store, started = route
+    ids = []
+    try:
+        one = _post("MONDO_0000001")
+        design_disease.main_scorer = None
+        from api import main
+        main.state["scorer"].disease_idx["MONDO_0000002"] = 1
+        two = _post("MONDO_0000002")
+        ids = [one.job_id, two.job_id]
+        assert one.job_id != two.job_id
+        assert sorted(started) == sorted(ids)
+    finally:
+        for jid in ids:
+            design._jobs.pop(jid, None)
