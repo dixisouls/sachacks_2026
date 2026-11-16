@@ -5,6 +5,7 @@ import Link from "next/link";
 import DiseaseSearch from "@/components/DiseaseSearch";
 import Footer from "@/components/Footer";
 import HeroChain from "@/components/product/HeroChain";
+import HeroResult from "@/components/product/HeroResult";
 import LiveDemo from "@/components/product/LiveDemo";
 import PathExplorer from "@/components/product/PathExplorer";
 import { getEval } from "@/lib/api";
@@ -40,32 +41,23 @@ export default function Home() {
 
   return (
     <div>
-      {/* hero: the search is the product, so it is the hero */}
-      <section className="mx-auto flex max-w-[1280px] flex-col items-center px-4 pb-20 pt-16 text-center sm:px-8 sm:pt-24">
-        <h1 className="max-w-[900px] text-[clamp(46px,8vw,100px)] font-extrabold leading-[0.92] tracking-[-0.055em]">
-          Three molecules,
-          <br />
-          designed while you watch.
-        </h1>
-        <p className="mt-7 max-w-[620px] text-[clamp(17px,1.6vw,20px)] leading-relaxed text-muted">
-          Name a disease. Scaffold picks a drug to build on, proposes molecules, throws most of them out, and keeps the
-          one that survives. None of them have ever been made.
-        </p>
-        <div className="mt-10 w-full max-w-[680px]">
-          <DiseaseSearch />
+      {/* hero: a finished molecule, because that is the product. The search is
+          further down, where someone who wants their own disease will look. */}
+      <section className="mx-auto max-w-[1180px] px-4 pb-16 pt-14 sm:px-8 sm:pt-20">
+        <div className="mx-auto max-w-[860px] text-center">
+          <h1 className="text-[clamp(42px,7vw,88px)] font-extrabold leading-[0.94] tracking-[-0.055em]">
+            A drug designer that
+            <br />
+            shows its failures.
+          </h1>
+          <p className="mx-auto mt-7 max-w-[640px] text-[clamp(17px,1.6vw,20px)] leading-relaxed text-muted">
+            Scaffold takes a disease, picks approved drugs that already reach it through biology, and designs new
+            molecules from them. A chemistry engine judges every one, and the rejects stay on the page beside the
+            survivor.
+          </p>
         </div>
-        <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-[14px]">
-          <span className="text-muted">Or try</span>
-          {DEMO_DISEASES.map((d) => (
-            <Link
-              key={d.disease_id}
-              href={`/d/${d.disease_id}`}
-              className="inline-flex h-9 items-center gap-2 rounded-full bg-surface px-3.5 font-semibold shadow-soft transition-colors hover:bg-lilac"
-            >
-              <span className="h-2 w-2 rounded-full bg-disease" />
-              {d.name}
-            </Link>
-          ))}
+        <div className="mt-12">
+          <HeroResult />
         </div>
       </section>
 
@@ -127,6 +119,30 @@ export default function Home() {
             See how we tested it
           </Link>
         </p>
+      </section>
+
+      {/* where someone who wants their own disease goes */}
+      <section id="start" className="mx-auto max-w-[1100px] scroll-mt-24 px-4 pt-28 sm:px-8">
+        <SectionHead title="Design for a disease.">
+          36,740 diseases. The run starts as the page opens and takes a few minutes; the two below are already
+          finished, so they open at once.
+        </SectionHead>
+        <div className="mx-auto max-w-[680px]">
+          <DiseaseSearch />
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-[14px]">
+            <span className="text-muted">Already run</span>
+            {DEMO_DISEASES.slice(0, 2).map((d) => (
+              <Link
+                key={d.disease_id}
+                href={`/d/${d.disease_id}`}
+                className="inline-flex h-9 items-center gap-2 rounded-full bg-surface px-3.5 font-semibold shadow-soft transition-colors hover:bg-lilac"
+              >
+                <span className="h-2 w-2 rounded-full bg-disease" />
+                {d.name}
+              </Link>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* principle */}
