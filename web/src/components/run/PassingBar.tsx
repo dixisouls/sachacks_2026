@@ -14,9 +14,11 @@ export default function PassingBar({
 }: {
   seed: Seed | null;
   rate?: number;
-  /** Set when no structure existed, so no molecule here could pass every
-   *  check — including the seed. Without this the column below would read the
-   *  seed's untested fit as a flaw a design could beat, which it cannot. */
+  /** Set when no measured structure existed, so nothing in the track was
+   *  tested against the target. It belongs in the column about what is not
+   *  tested, and nowhere near the seed's own verdict: with no pocket there is
+   *  no pocket check, so the seed passes or fails on the molecule-alone checks
+   *  exactly as the designs do, and the comparison between them stays fair. */
   capped?: string | null;
 }) {
   if (!seed && rate == null) return null;
@@ -34,11 +36,9 @@ export default function PassingBar({
               <Verdict status={seed.check.status} />
             </dd>
             <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-              {capped
-                ? `Neither ${seed.name} nor anything designed from it could be tested for fit, so neither clears every check. That is a test missing, not a mark against either of them.`
-                : seed.check.status === "pass"
-                  ? `${seed.name} clears every check too, and it is already a medicine. A design that only matches it has improved on nothing.`
-                  : `${seed.name} does not clear every check itself, so a design that does has at least beaten its own starting point on paper.`}
+              {seed.check.status === "pass"
+                ? `${seed.name} clears every check too, and it is already a medicine. A design that only matches it has improved on nothing.`
+                : `${seed.name} does not clear every check itself, so a design that does has at least beaten its own starting point on paper.`}
             </p>
           </div>
         )}
@@ -54,10 +54,13 @@ export default function PassingBar({
         )}
         <div>
           <dt className="text-[13px] text-muted">What is not tested</dt>
-          <dd className="mt-1 text-[15px] font-semibold">Binding, and safety</dd>
+          <dd className="mt-1 text-[15px] font-semibold">
+            {capped ? "The target, binding and safety" : "Binding, and safety"}
+          </dd>
           <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
             Nothing here measures whether a molecule binds anything. No assay was run, nothing was synthesised, and no
             animal or person has been near any of these structures.
+            {capped ? ` ${capped}` : ""}
           </p>
         </div>
       </dl>

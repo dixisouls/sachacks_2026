@@ -39,17 +39,19 @@ export default function TrackPanel({
   const running = live.status === "running" || live.status === "waiting";
   const pocket = live.pocket ?? track?.pocket ?? null;
 
-  // When no co-crystal exists for the seed, the fit check comes back untested
-  // on every molecule, and a molecule's verdict is its worst check — so the
-  // whole track tops out at "questions" and nothing can ever be accepted.
-  // A bare "0 of 36 accepted" reads as total failure when the truth is that
-  // the one test that would have mattered could not be run. Said once here,
-  // and passed to the two other places that would otherwise imply a verdict.
+  // When no co-crystal exists for the seed there is nothing to place anything
+  // into, so no fit check is run at all and a molecule's verdict is the worst
+  // of the nine checks about the molecule itself. Those nine are the same set
+  // the 81.5% figure was measured against, so "accepted" stays comparable to
+  // it — but it now means "passed the molecule-alone checks", and on its own
+  // an accepted chip would read as though something had been validated against
+  // the target. Nothing was. Said once here, and passed to the places that
+  // would otherwise imply more than was done.
   // Gated on the pocket event having landed (it always brings one or the
   // other), because before it arrives a null pocket only means "not yet".
   const capped = !pocket && (live.proteins.length > 0 || !!live.pocketNote);
   const whyCapped = capped
-    ? `No measured structure exists for ${seed?.name ?? "the drug it started from"}, so the fit test could not be run on anything in this track. Nothing here can pass every check, however good it is.`
+    ? `No measured structure of ${seed?.name ?? "the drug it started from"} inside a target protein was found, so nothing in this track was tested against the target at all. Every check these passed was about the molecule alone.`
     : null;
 
   // A track switch should not carry the previous track's selection over.
@@ -87,8 +89,8 @@ export default function TrackPanel({
             <p className="max-w-[60ch] text-[13.5px] leading-relaxed text-muted">
               {capped ? (
                 <>
-                  None of the {live.tried} could pass every check here, because the fit test cannot run without a
-                  measured structure. Pick one to see what it was judged on.
+                  {live.accepted} of {live.tried} passed every check that was run, and none of them was tested against
+                  the target. Pick one to see what it was judged on.
                 </>
               ) : (
                 <>
@@ -186,10 +188,11 @@ function Narrative({ live, running, capped }: { live: TrackState; running: boole
                 : "Finished"}
         </h3>
         <span className="ml-auto text-[13px] text-muted" aria-live="polite">
-          {/* "0 accepted" would be the worst thing to show when nothing could be */}
+          {/* "accepted" is too strong here, with nothing tested on the target */}
           {capped ? (
             <>
-              <span className="tabular-nums">{live.tried}</span> proposed, none testable
+              <span className="tabular-nums">{live.tried}</span> proposed,{" "}
+              <span className="tabular-nums">{live.accepted}</span> passed the checks
             </>
           ) : (
             <>
@@ -246,9 +249,9 @@ function Winner({ molecule, capped }: { molecule: LiveMolecule; capped: string |
         </h3>
         <Verdict status={molecule.status} big />
       </div>
-      {capped && molecule.status === "warn" && (
+      {capped && (
         <p className="mt-2.5 max-w-[70ch] rounded-[22px] bg-soft-2 px-4 py-3 text-[14px] leading-relaxed text-muted">
-          Its verdict stops at questions rather than accepted, and that is not a mark against it. {capped}
+          Accepted here means it passed the checks about the molecule itself. {capped}
         </p>
       )}
       {molecule.rationale && (

@@ -82,6 +82,14 @@ const PROTEINS: Protein[] = [
 
 const POCKET = { pdb_id: "5IRZ", clashes: 0, atoms: 24, rmsd: 0.41, core_atoms: 16, closest_A: 3.2 };
 
+// Trofinetide's targets, none of them with a measured pose of the drug. This
+// is the common case — most drugs have no co-crystal — and it is why two of
+// the three tracks here are judged on the molecule-alone checks only.
+const UNSTRUCTURED: Protein[] = [
+  { gene_id: "ENSG00000017427", symbol: "IGF1", uniprot_id: "P05019", has_structure: false, pdb_id: null },
+  { gene_id: "ENSG00000140443", symbol: "IGF1R", uniprot_id: "P08069", has_structure: false, pdb_id: null },
+];
+
 const SEED_CBD: Seed = {
   drug_id: "CHEMBL190461",
   name: "Cannabidiol",
@@ -173,14 +181,14 @@ const SPECS: Spec[] = [
     pool: "all",
     id: "c1",
     round: 1,
-    name: "CBD-N4",
-    smiles: "CCCCCc1cc(O)c(C2CC(C)=CCC2C(C)=C)c(O)c1C#N",
+    name: "TFN-R2",
+    smiles: "CC(N)C(=O)N1CCCC1C(=O)NC(CCC(=O)O)C(=O)OCC",
     rationale:
-      "A nitrile borrowed from the investigational list, which used it to hold the same ring in place without adding weight.",
-    builds_on: "Cannabidiol",
-    summary: "A chemist would struggle to put a nitrile there.",
-    bad: { id: "makeable", status: "fail", value: "8.2 of 10", problem: "No routine route to this substitution" },
-    placed: true,
+      "An ethyl ester on the free acid, the trick an approved prodrug used on the same problem: hide the charge until the gut has let it through.",
+    builds_on: "Trofinetide",
+    summary: "Too close to the compound it came from to count as new.",
+    bad: { id: "novel", status: "fail", value: "0.91 to trofinetide", problem: "Almost the starting compound again" },
+    placed: false,
     proposed: 11.2,
     judged: 13.9,
   },
@@ -188,14 +196,14 @@ const SPECS: Spec[] = [
     pool: "all",
     id: "c2",
     round: 2,
-    name: "CBD-H9",
-    smiles: "OCCCCCc1cc(O)c(C2CC(C)=CCC2C(C)=C)c(O)c1",
+    name: "TFN-K8",
+    smiles: "CC(N)C(=O)N1CCCC1C(=O)NC(CC1=CC=CC=C1)C(=O)NC",
     rationale:
-      "A hydroxyl at the end of the tail instead, which is a one-step change from cannabidiol and the same trick two dropped compounds used to cut logP.",
-    builds_on: "CBD-N4",
-    summary: "Clears every check.",
+      "Swap the glutamate for a phenylalanine and cap the end as a methylamide: it loses both charges at once, which is what kept the parent out of the brain, and the ring is what two of the dropped compounds used in that position.",
+    builds_on: "TFN-R2",
+    summary: "Passes every check.",
     bad: null,
-    placed: true,
+    placed: false,
     proposed: 29.4,
     judged: 32.0,
   },
@@ -291,26 +299,60 @@ const CASE = {
   next_step: "A TRPV1 binding assay against cannabidiol as the control. One plate, and it either binds or it does not.",
 };
 
+const SYNTHESIS_PEPTIDE = {
+  difficulty: "5.2 of 10, standard peptide coupling",
+  steps: [
+    { n: 1, what: "Couple Boc-alanine to proline methyl ester", why: "Builds the two residues the parent keeps" },
+    { n: 2, what: "Hydrolyse the ester and couple phenylalanine methylamide", why: "Puts the uncharged tail on" },
+    { n: 3, what: "Remove the Boc group with acid", why: "Frees the amine the parent needs" },
+  ],
+  note: "Three couplings and a deprotection, all routine, but a peptide is harder to make than a small molecule and the score says so.",
+};
+
+/** The case for a track where no structure existed. Its first entry against is
+ *  the floor fact the backend writes in code for exactly this situation. */
+const CASE_NO_POCKET = {
+  verdict: "A reasonable idea on paper, with nothing yet that tests it.",
+  for: [
+    "Loses both charges, which is what kept trofinetide out of the brain",
+    "Three routine couplings from residues you can buy",
+    "The ring in that position is what two dropped compounds used",
+  ],
+  against: [
+    "No measured structure of trofinetide inside a target protein was found, so nothing in this track tested the target at all. Every check it passed was about the molecule alone.",
+    "Nothing here tests binding. No assay was run and none could be.",
+    "163 of 200 random molecules pass these same checks, so passing them is a low bar.",
+    "Still a peptide, so it inherits a peptide's half-life as well as its synthesis.",
+  ],
+  next_step: "An IGF1R binding assay with trofinetide as the control, which is also the only way to find out whether the parent's mechanism survived the change.",
+};
+
+// Only the approved track's seed has a measured pose. The other two share
+// trofinetide, which has none — so between them the three tracks cover all
+// three real states: judged with a pocket, judged without one, and stopped.
+const STRUCTURED: Record<Pool, boolean> = { approved: true, investigational: false, all: false };
+
 function trackOf(pool: Pool, done: boolean): Track {
   const specs = SPECS.filter((s) => s.pool === pool);
   const attempts = specs.map((s) => attemptFor(s.id));
   const best = pool === "approved" ? attemptFor("a3") : pool === "all" ? attemptFor("c2") : null;
   const failed = pool === "investigational";
+  const structured = STRUCTURED[pool];
   return {
     pool,
     ...LABELS[pool],
     status: done ? (failed ? "error" : "done") : "waiting",
-    seed: done ? (failed ? SEED_TROFINETIDE : SEED_CBD) : null,
+    seed: done ? (pool === "approved" ? SEED_CBD : SEED_TROFINETIDE) : null,
     studied: pool === "approved" ? { approved: 48, investigational: 0 } : pool === "investigational" ? { approved: 0, investigational: 23 } : { approved: 48, investigational: 23 },
-    pocket: done && !failed ? { pdb_id: "5IRZ", resolution_A: 2.6 } : null,
-    proteins: done && !failed ? PROTEINS : [],
+    pocket: done && structured ? { pdb_id: "5IRZ", resolution_A: 2.6 } : null,
+    proteins: done ? (structured ? PROTEINS : UNSTRUCTURED) : [],
     attempts: done ? [...attempts].sort((a, b) => rank(a) - rank(b)) : [],
     best: done ? best : null,
     workup:
       done && pool === "approved"
         ? { synthesis: SYNTHESIS, admet: ADMET, offtarget: OFFTARGET, case: CASE }
         : done && pool === "all"
-          ? { ...EMPTY_WORKUP, synthesis: SYNTHESIS, offtarget: OFFTARGET_NONE, case: CASE }
+          ? { ...EMPTY_WORKUP, synthesis: SYNTHESIS_PEPTIDE, offtarget: OFFTARGET_NONE, case: CASE_NO_POCKET }
           : null,
     error: done && failed ? "Gemini returned no parsable molecule for two rounds running, so this track was stopped." : null,
   };
@@ -328,7 +370,7 @@ function events(): RunEvent[] {
   push({ type: "phase", at: 1.6, text: "Three tracks starting at once" });
 
   push({ type: "seed", at: 2.1, track: "approved", seed: SEED_CBD });
-  push({ type: "seed", at: 2.4, track: "all", seed: SEED_CBD });
+  push({ type: "seed", at: 2.4, track: "all", seed: SEED_TROFINETIDE });
   push({ type: "seed", at: 2.9, track: "investigational", seed: SEED_TROFINETIDE });
 
   push({
@@ -343,18 +385,15 @@ function events(): RunEvent[] {
     type: "pocket",
     at: 4.1,
     track: "all",
-    text: "Same seed, same measured pocket: TRPV1 at 2.6 Å.",
-    pocket: { pdb_id: "5IRZ", resolution_A: 2.6 },
-    proteins: PROTEINS,
+    text: "No structure of trofinetide inside any of its targets was found, so nothing in this track can be placed in a pocket and no fit was tested.",
+    proteins: UNSTRUCTURED,
   });
   push({
     type: "pocket",
     at: 4.6,
     track: "investigational",
-    text: "No co-crystal structure exists for trofinetide, so nothing in this track can be placed in a pocket.",
-    proteins: [
-      { gene_id: "ENSG00000017427", symbol: "IGF1", uniprot_id: "P05019", has_structure: false, pdb_id: null },
-    ],
+    text: "No structure of trofinetide inside any of its targets was found, so nothing in this track can be placed in a pocket and no fit was tested.",
+    proteins: UNSTRUCTURED,
   });
 
   // Round one, all three at once.
@@ -369,6 +408,12 @@ function events(): RunEvent[] {
     text: "Cannabidiol's problem is not its shape, it is how fast the body clears it. The two phenols are what get glucuronidated, so the question is which of them can go.",
   });
   push({ type: "thinking", at: 7.0, track: "investigational", text: "Trofinetide is a tripeptide, so anything built on it inherits a peptide's problems." });
+  push({
+    type: "thinking",
+    at: 7.4,
+    track: "all",
+    text: "Both charges have to go. Seeing the approved list as well as the dropped one, the useful observation is that the approved side solves this with prodrug esters and the dropped side solves it by replacing the residue outright.",
+  });
 
   for (const spec of SPECS) {
     push({
@@ -425,13 +470,13 @@ function events(): RunEvent[] {
   push({ type: "round", at: 34.0, track: "approved", n: 3, of: 3 });
   push({ type: "thinking", at: 35.2, track: "approved", text: "An amide can make the same hydrogen bond the phenol made, and it is not a phenol." });
 
-  push({ type: "best", at: 33.0, track: "all", id: "c2", name: "CBD-H9" });
+  push({ type: "best", at: 33.0, track: "all", id: "c2", name: "TFN-K8" });
   push({ type: "best", at: 42.5, track: "approved", id: "a3", name: "CBD-A7" });
 
   // The workup, on the winner, section by section.
   push({ type: "workup_step", at: 34.0, track: "all", step: 1, kind: "synthesis", label: "Working out how to make it", status: "running" });
   push({ type: "workup_step", at: 37.5, track: "all", step: 1, kind: "synthesis", label: "Working out how to make it", status: "done" });
-  push({ type: "workup", at: 37.6, track: "all", kind: "synthesis", data: SYNTHESIS });
+  push({ type: "workup", at: 37.6, track: "all", kind: "synthesis", data: SYNTHESIS_PEPTIDE });
   push({ type: "workup_step", at: 37.8, track: "all", step: 2, kind: "admet", label: "What the body would do to it", status: "running" });
   push({
     type: "workup_step",
@@ -448,7 +493,7 @@ function events(): RunEvent[] {
   push({ type: "workup", at: 40.7, track: "all", kind: "offtarget", data: OFFTARGET_NONE });
   push({ type: "workup_step", at: 40.9, track: "all", step: 4, kind: "case", label: "The case for taking it forward", status: "running" });
   push({ type: "workup_step", at: 43.0, track: "all", step: 4, kind: "case", label: "The case for taking it forward", status: "done" });
-  push({ type: "workup", at: 43.1, track: "all", kind: "case", data: CASE });
+  push({ type: "workup", at: 43.1, track: "all", kind: "case", data: CASE_NO_POCKET });
   push({ type: "track_done", at: 43.6, track: "all", tried: 2, accepted: 1 });
 
   const steps: [number, "synthesis" | "admet" | "offtarget" | "case", string, number, unknown][] = [

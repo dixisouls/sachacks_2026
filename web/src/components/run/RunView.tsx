@@ -161,7 +161,8 @@ function TrackPip({
   tried: number;
   accepted: number;
   round: { n: number; of: number } | null;
-  /** No structure to test a fit against, so `accepted` can only ever be 0. */
+  /** No measured structure, so nothing in the track was tested on the target
+   *  and "kept" means it cleared the molecule-alone checks. */
   capped: boolean;
 }) {
   const word =
@@ -174,7 +175,7 @@ function TrackPip({
         : status === "error"
           ? "stopped early"
           : capped
-            ? `${tried} proposed, no structure to test`
+            ? `${accepted} of ${tried} kept, none tested on target`
             : `${accepted} of ${tried} kept`;
 
   return (
