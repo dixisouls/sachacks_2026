@@ -236,6 +236,34 @@ async def rcsb_best_cocrystal(up: _Upstream, uniprot_id: str, comp_ids: list[str
     return pdb_id, comp_id, res
 
 
+async def rcsb_best_apo(up: _Upstream, uniprot_id: str) -> tuple[str, float | None] | None:
+    """Best-resolution experimental structure of this protein, whatever is bound to it.
+
+    Only runs when no structure holds our own drug. A measured protein with
+    somebody else's ligand in it, or nothing at all, still beats a prediction:
+    the fold is observed rather than inferred. It says nothing about where our
+    drug would go, so the plan stays SEPARATE and the caption says which it is.
+    """
+    ids = await up.search({
+        "query": {"type": "terminal", "service": "text", "parameters": {
+            "attribute": "rcsb_polymer_entity_container_identifiers."
+                         "reference_sequence_identifiers.database_accession",
+            "operator": "exact_match", "value": uniprot_id}},
+        "return_type": "entry",
+        "request_options": {
+            "sort": [{"sort_by": "rcsb_entry_info.resolution_combined", "direction": "asc"}],
+            "paginate": {"start": 0, "rows": 1}}})
+    if not ids:
+        return None
+    pdb_id = ids[0]
+    r = await up.get(RCSB_ENTRY.format(pdb_id=pdb_id))
+    res = None
+    if r is not None and r.status_code == 200:
+        values = (r.json().get("rcsb_entry_info") or {}).get("resolution_combined") or []
+        res = float(min(values)) if values else None
+    return pdb_id, res
+
+
 async def alphafold_entry(up: _Upstream, uniprot_id: str) -> dict | None:
     """AlphaFold DB prediction metadata, disk cached (also used by the file proxy)."""
     path = _cache_path("alphafold", f"{uniprot_id}.json")
@@ -306,8 +334,20 @@ async def build_structure_plan(drug_id: str, gene_id: str,
                 caption=f"Experimental structure · PDB {pdb_id} · {res_txt} · "
                         f"{drug_name} bound to {symbol}")
         else:
+            apo = await rcsb_best_apo(up, uniprot_id) if uniprot_id else None
             af = await alphafold_entry(up, uniprot_id) if uniprot_id else None
-            if af and af.get("pdbUrl"):
+            if apo:
+                pdb_id, res = apo
+                res_txt = f"{res:.1f} Å" if res is not None else "resolution n/a"
+                plan = StructurePlan(
+                    mode="SEPARATE", drug=drug_s, ligand_comp_id=None, resolution_A=res,
+                    protein=ProteinStructure(source="PDB", id=pdb_id, format="cif",
+                                             file_url=_file_url("rcsb", pdb_id),
+                                             uniprot_id=uniprot_id, gene_symbol=symbol,
+                                             mean_plddt=None),
+                    caption=f"Experimental structure · PDB {pdb_id} · {res_txt} · {symbol} "
+                            f"measured without {drug_name}, so where it would bind is unknown")
+            elif af and af.get("pdbUrl"):
                 plddt = af.get("globalMetricValue")
                 plddt_txt = f"{plddt:.1f}" if plddt is not None else "n/a"
                 plan = StructurePlan(
