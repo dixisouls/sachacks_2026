@@ -19,22 +19,24 @@ export default function RunView({ run }: { run: Run }) {
   const [pool, setPool] = useState<Pool>("approved");
   const live = state.tracks[pool];
   const track = job?.tracks?.[pool];
-  const started = POOLS.some((p) => state.tracks[p].status !== "waiting");
 
+  // Arrow keys move the selection and the focus together, so the tab that is
+  // announced is the tab that is showing.
   const move = (delta: number) => {
     const next = POOLS[(POOLS.indexOf(pool) + delta + POOLS.length) % POOLS.length];
     setPool(next);
+    document.getElementById(`tab-${next}`)?.focus();
   };
 
   return (
     <div className="space-y-5">
       <p className="max-w-[72ch] text-[14.5px] leading-relaxed text-muted">
         <span className="font-semibold text-foreground">These molecules have never been made.</span> Three tracks are
-        designing at the same time, each from a different starting drug, and each one keeps whatever survives its own
-        checks. Passing those checks is a low bar, and it is spelled out beside every result.
+        designing at the same time, each allowed to learn from a different set of existing drugs, and each keeps
+        whatever survives its own checks. Passing those checks is a low bar, and it is spelled out beside every result.
       </p>
 
-      {state.phase && !started && (
+      {state.phase && state.status === "running" && (
         <p className="flex items-center gap-2.5 text-[15px] font-semibold" aria-live="polite">
           <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
           {state.phase}

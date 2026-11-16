@@ -27,8 +27,11 @@ export default function TrackPanel({
 }) {
   const [picked, setPicked] = useState<string | null>(null);
   const molecules = live.order.map((id) => live.molecules[id]).filter(Boolean);
-  const judged = [...molecules].reverse().find((m) => m.status !== "pending");
-  const auto = live.bestId ?? judged?.id ?? molecules[molecules.length - 1]?.id ?? null;
+  // Follow the newest molecule until the track names a winner, and stop
+  // following the moment the reader picks one for themselves. A molecule with
+  // no verdict yet has no pose either, so it arrives flat and settles into the
+  // pocket when its check comes back.
+  const auto = live.bestId ?? molecules[molecules.length - 1]?.id ?? null;
   const shownId = picked && live.molecules[picked] ? picked : auto;
   const shown = shownId ? live.molecules[shownId] : null;
   const best = live.bestId ? live.molecules[live.bestId] : null;
@@ -159,16 +162,16 @@ function Narrative({ live, running }: { live: TrackState; running: boolean }) {
                 ? "Getting started"
                 : "Finished"}
         </h3>
-        <span className="ml-auto text-[13px] tabular-nums text-muted">
+        <span className="ml-auto text-[13px] tabular-nums text-muted" aria-live="polite">
           {live.tried} proposed, {live.accepted} accepted
         </span>
       </div>
 
+      {/* Not a live region: the whole text is resent as it grows, so announcing
+          every version would read the same paragraph over and over. The counter
+          above carries the state a screen reader needs. */}
       {live.thinking && (
-        <p
-          className="mt-3 max-h-48 overflow-y-auto text-[14px] leading-relaxed text-foreground/85"
-          aria-live="polite"
-        >
+        <p className="mt-3 max-h-48 overflow-y-auto text-[14px] leading-relaxed text-foreground/85">
           {live.thinking}
           <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 animate-pulse bg-accent" />
         </p>
