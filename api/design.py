@@ -606,32 +606,47 @@ async def run_rounds(job: dict[str, Any], context: dict[str, Any],
                   builds_on=proposal.get("builds_on", ""))
 
             if smiles in seen:
+                # `problem` is not optional: chemcheck.feedback_line reads it from
+                # every check that did not pass, to write the line the next round
+                # reads. Without it this raised KeyError on the one thing the
+                # branch exists to handle gracefully -- the model repeating itself,
+                # which rule 4 of the prompt asks it not to do and it does anyway
+                # -- and the exception escaped the round and killed the whole track.
                 check = {"smiles": smiles, "valid": True, "status": "fail",
                          "summary": "Already proposed in an earlier round.",
                          "checks": [{"id": "repeat", "label": "A new attempt", "status": "fail",
-                                     "value": "repeat", "detail": "This exact structure was "
-                                                                  "already tried this run."}],
+                                     "value": "repeat",
+                                     "problem": "repeats a structure already tried",
+                                     "detail": "This exact structure was "
+                                               "already tried this run."}],
                          "properties": {}}
             else:
                 seen.add(smiles)
                 check = await asyncio.to_thread(
                     chemcheck.evaluate, smiles, context["parent_smiles"], context["parent_name"])
                 if check["valid"]:
-                    fit, note = None, None
+                    # Only judged against the pocket when there is a pocket. With no
+                    # measured position there is nothing to place anything into, and
+                    # recording that as a warning against each molecule said "could
+                    # not be placed" about a placement that was never attempted --
+                    # which also made every molecule warn, so a run on a drug with no
+                    # co-crystal accepted none of its 36 attempts while the page
+                    # explained that 81.5% of random molecules pass. The absence is
+                    # said once per track in the `pocket` event and again in the case
+                    # against; it is not a fact about any one molecule.
                     if pocket:
+                        fit, note = None, None
                         try:
                             fit = await asyncio.to_thread(pocket_mod.place, smiles, pocket)
                         except Exception as exc:
                             note = str(exc)
-                    else:
-                        note = pocket_note
-                    check["checks"].append(pocket_mod.as_check(fit, note))
-                    if fit:
-                        check["properties"]["pocket"] = {
-                            k: fit[k] for k in
-                            ("pdb_id", "clashes", "atoms", "rmsd", "core_atoms", "closest_A")}
-                        check["pose_sdf"] = fit["sdf"]
-                    # the worst check still decides, now that fit is one of them
+                        check["checks"].append(pocket_mod.as_check(fit, note))
+                        if fit:
+                            check["properties"]["pocket"] = {
+                                k: fit[k] for k in
+                                ("pdb_id", "clashes", "atoms", "rmsd", "core_atoms", "closest_A")}
+                            check["pose_sdf"] = fit["sdf"]
+                    # the worst check still decides, now that fit may be one of them
                     statuses = [c["status"] for c in check["checks"]]
                     check["status"] = ("fail" if "fail" in statuses
                                        else "warn" if "warn" in statuses else "pass")
