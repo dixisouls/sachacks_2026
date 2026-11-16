@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Molecule2D from "@/components/Molecule2D";
 import PoseViewer from "@/components/PoseViewer";
+import ProteinOnly from "./ProteinOnly";
 import { Verdict } from "@/components/checks";
 import type { Pocket, Protein } from "@/lib/run";
 import type { LiveMolecule } from "@/lib/useRun";
@@ -21,6 +22,7 @@ export default function Stage({
   pocket,
   pocketNote,
   seedName,
+  seedDrugId,
   waiting,
 }: {
   molecule: LiveMolecule | null;
@@ -28,6 +30,8 @@ export default function Stage({
   pocket: Pocket | null;
   pocketNote: string;
   seedName: string;
+  /** The drug the track started from, needed to look a protein structure up. */
+  seedDrugId: string;
   /** Nothing has been proposed yet, so there is genuinely nothing to draw. */
   waiting: boolean;
 }) {
@@ -119,6 +123,22 @@ export default function Stage({
               )}
             </figcaption>
           )}
+
+          {/* The target itself. Not the same claim as the pose viewer: a
+              structure of the protein exists far more often than a measured
+              position for the drug inside it, and seeing what is being aimed
+              at beats an empty panel saying nothing was found. */}
+          {selected && seedDrugId && (
+            <div className="mt-6">
+              <ProteinOnly
+                key={`${seedDrugId}|${selected.gene_id}`}
+                drugId={seedDrugId}
+                geneId={selected.gene_id}
+                symbol={selected.symbol}
+                moleculeName={molecule?.name ?? "the designed molecule"}
+              />
+            </div>
+          )}
         </figure>
       )}
 
@@ -143,7 +163,7 @@ export default function Stage({
                   title={
                     canDraw
                       ? `${seedName} was measured inside ${protein.symbol} (${protein.pdb_id})`
-                      : `No structure was looked up for ${protein.symbol}, so there is nothing to place the molecule in`
+                      : `No measured pose of ${seedName} inside ${protein.symbol}, so nothing can be placed in it. The protein itself is shown below when a structure of it exists.`
                   }
                   className={`flex h-9 items-center gap-2 rounded-full px-3.5 font-mono text-[13px] font-medium transition-colors ${
                     active ? "bg-foreground text-surface" : "bg-soft-2 text-muted hover:text-foreground"
