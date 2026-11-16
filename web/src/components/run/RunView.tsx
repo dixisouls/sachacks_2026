@@ -19,6 +19,7 @@ export default function RunView({ run }: { run: Run }) {
   const [pool, setPool] = useState<Pool>("approved");
   const live = state.tracks[pool];
   const track = job?.tracks?.[pool];
+  const allFailed = state.status !== "running" && POOLS.every((p) => state.tracks[p].status === "error");
 
   // Arrow keys move the selection and the focus together, so the tab that is
   // announced is the tab that is showing.
@@ -104,6 +105,17 @@ export default function RunView({ run }: { run: Run }) {
 
       {state.error && <ErrorCard msg="The run failed" detail={state.error} onRetry={run.again} />}
 
+      {/* Every track failing still counts as a finished job, so without this
+          the page is three separate error cards and a cheerful line about a
+          saved run. Say it once, at the top, with the way out. */}
+      {allFailed && (
+        <ErrorCard
+          msg="All three tracks stopped early"
+          detail="Nothing was designed for this disease. Each track's own reason is on its tab. This is usually the model being unavailable rather than the disease being impossible, so it is worth designing again."
+          onRetry={run.again}
+        />
+      )}
+
       <div role="tabpanel" id={`panel-${pool}`} aria-labelledby={`tab-${pool}`} className="pt-1">
         <TrackPanel key={pool} live={live} track={track} rate={job?.random_pass_rate} />
       </div>
@@ -111,9 +123,11 @@ export default function RunView({ run }: { run: Run }) {
       {state.status !== "running" && (
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
           <p className="text-[13px] text-muted">
-            {job?.cached
-              ? "A saved run, reused so nothing is spent repeating it."
-              : "Run finished. Every attempt above is kept."}
+            {allFailed
+              ? "This run is saved as it stands, so opening the page again will show the same failure until you design again."
+              : job?.cached
+                ? "A saved run, reused so nothing is spent repeating it."
+                : "Run finished. Every attempt above is kept."}
           </p>
           {link !== "offline" && (
             <button
