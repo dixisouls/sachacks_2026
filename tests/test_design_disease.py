@@ -17,7 +17,7 @@ import pytest
 
 from api import design, design_disease
 from api.design import _emit
-from api.design_disease import POOLS, _pick_seed, _proteins, _run_disease, _run_track
+from api.design_disease import POOLS, _pick_seed, _proteins, _run_disease
 
 def _run(coro, timeout: float = 30):
     """Run one coroutine to completion, with a timeout so a deadlock fails the test."""

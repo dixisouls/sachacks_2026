@@ -331,7 +331,7 @@ ADMET_SCHEMA = {
 
 
 async def _admet(track: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-    check, smiles, name = _winner(track)
+    _, smiles, name = _winner(track)
     computed = admet_items(smiles)
 
     lines = [f"- {i['label']}: {i['value']} (judged {i['status']}). {i['fact']}"
@@ -476,7 +476,7 @@ OFFTARGET_SCHEMA = {
 
 
 async def _offtarget(track: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-    check, smiles, name = _winner(track)
+    _, smiles, name = _winner(track)
     targets = context.get("targets") or []
     found = homologs([t.get("gene_id") for t in targets])
     if not found:
