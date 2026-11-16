@@ -1,6 +1,7 @@
 """Run the real three-track disease job in-process and audit its event stream.
 
     venv/bin/python scripts/design_disease_live.py MONDO_0005301 [--save run.json]
+    venv/bin/python scripts/design_disease_live.py --audit run.json   # no model calls
 
 This spends real model calls, which is the point: scripts/design_disease_check.py
 proves a disease has seeds to design from, and tests/test_design_disease.py
@@ -155,8 +156,10 @@ def _unjudged(events: list[dict]) -> set[str]:
 
 
 def summarise(job: dict) -> None:
+    # No clock when the job came off the disk rather than out of this process.
+    took = f", {time.time() - job['started']:.0f}s" if job.get("started") else ""
     print(f"\n{job['disease_name']} ({job['disease_id']}) -- {job['status']}, "
-          f"{len(job['events'])} events, {time.time() - job['started']:.0f}s")
+          f"{len(job['events'])} events{took}")
     for pool in POOLS:
         track = job["tracks"][pool]
         seed = (track["seed"] or {}).get("name", "-")
@@ -165,13 +168,36 @@ def summarise(job: dict) -> None:
         sections = [k for k, v in (track["workup"] or {}).items() if v]
         print(f"  {pool:16} {track['status']:7} seed {seed:22} "
               f"{len(track['attempts'])} tried, {passed} pass, best {best}")
-        print(f"  {'':16} pocket {track['pocket'] or 'none':<28} "
+        pocket = track["pocket"]
+        where = (f"{pocket['pdb_id']}"
+                 + (f" at {pocket['resolution_A']} A" if pocket.get("resolution_A") else "")
+                 if pocket else "none")
+        print(f"  {'':16} pocket {where:<28} "
               f"workup {', '.join(sections) or 'nothing'}")
         if track["error"]:
             print(f"  {'':16} ERROR {track['error']}")
         unjudged = _unjudged([e for e in job["events"] if e.get("track") == pool])
         if unjudged:
             print(f"  {'':16} UNJUDGED {sorted(unjudged)}")
+
+
+def audit_file(path: str) -> int:
+    """Audit a run that already happened, from --save output or a cache entry.
+
+    Added because a run was lost to a formatting bug in summarise() after the
+    model work was done and paid for. The job is on disk either way, so the
+    audit should never need the run repeated.
+    """
+    payload = json.loads(Path(path).expanduser().read_text())
+    # A cache entry is the {"key", "value"} envelope; --save writes the job itself.
+    job = payload["value"] if "value" in payload and "tracks" not in payload else payload
+    job.setdefault("started", 0)
+    summarise(job)
+    bad = audit(job)
+    print(f"\n{len(bad)} contract problem(s)")
+    for problem in bad:
+        print(f"  ! {problem}")
+    return 1 if bad else 0
 
 
 async def main(disease_id: str, save_to: str | None) -> int:
@@ -232,6 +258,12 @@ async def _watch(job: dict) -> None:
 
 if __name__ == "__main__":
     argv = sys.argv[1:]
-    save = argv[argv.index("--save") + 1] if "--save" in argv[:-1] else None
-    free = [a for a in argv if not a.startswith("--") and a != save]
+
+    def after(flag: str) -> str | None:
+        return argv[argv.index(flag) + 1] if flag in argv[:-1] else None
+
+    save, replay = after("--save"), after("--audit")
+    if replay:
+        raise SystemExit(audit_file(replay))
+    free = [a for a in argv if not a.startswith("--") and a not in (save, replay)]
     raise SystemExit(asyncio.run(main(free[0] if free else "MONDO_0010726", save)))
