@@ -186,10 +186,10 @@ absent for job-level events.
 | `round` | `track`, `n`, `of` | a round began |
 | `thinking` | `track`, `text` | the reasoning so far, **resent whole as it grows** |
 | `reasoning` | `track`, `round`, `text` | the finished reasoning for a round |
-| `molecule` | `track`, `id`, `name`, `smiles`, `rationale`, `builds_on` | proposed, not yet judged |
+| `molecule` | `track`, `id`, `round`, `name`, `smiles`, `rationale`, `builds_on` | proposed, not yet judged |
 | `verdict` | `track`, `id`, `status`, `summary`, `check` | judged |
 | `note` | `track?`, `text` | anything worth saying |
-| `best` | `track`, `id`, `name` | the track picked its winner |
+| `best` | `track`, `id`, `name`, `status` | the track picked its winner |
 | `workup_step` | `track`, `step`, `label`, `status`, `text?` | a workup section started or finished |
 | `workup` | `track`, `kind`, `data` | a finished workup section |
 | `track_done` | `track`, `tried`, `accepted` | a track finished |
@@ -214,6 +214,12 @@ Rules the frontend can rely on:
   protein selector.
 - `pose_sdf` is one pose in one PDB entry's frame, the entry named by
   `properties.pocket.pdb_id`. There is no per-protein pose.
+- An `Evaluation` carries a check with `id: "pocket"` only when that track found
+  a measured position, which is to say only when its `pocket` is not null. With
+  no structure there is nothing to place a molecule into, so nothing is claimed
+  per molecule and the track says it once, in its `pocket` event and in
+  `case.against`. Do not read a missing pocket check as a molecule that failed
+  one: with no structure, a molecule can still pass every check.
 - `case.against` always contains the three honest facts (nothing tests binding,
   most random molecules pass these checks, the pocket result is a placement and
   not a docking). The backend adds them in code; the model can lengthen that
