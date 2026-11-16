@@ -16,7 +16,7 @@ import polars as pl
 import pytest
 
 from api import design, design_disease
-from api.design import _emit
+from api.design import _emit, _load_pocket, pocket_lines
 from api.design_disease import POOLS, _pick_seed, _proteins, _run_disease
 
 def _run(coro, timeout: float = 30):
@@ -511,3 +511,43 @@ def test_the_all_failed_note_arrives_before_done(stub, monkeypatch):
                 if e["type"] == "note" and "nothing was saved" in e["text"])
     assert note < kinds.index("done")
     assert kinds[-1] == "done"
+
+
+def test_the_pocket_event_always_carries_a_reason(stub, monkeypatch):
+    """The page decides whether to say "none testable" on this event arriving.
+
+    It gates that on `proteins.length > 0 || text`, so one of the two must always
+    be there -- otherwise, with no pocket and no targets, the page cannot tell
+    "the lookup found nothing" from "the lookup has not reported yet" and would
+    either stay silent forever or announce a conclusion it does not have.
+    """
+    def no_targets(drug_id, disease_id, pool="all", result=None):
+        return {"text": "ctx", "parent_smiles": "CCO", "parent_name": "Seed",
+                "disease_name": "test disease", "targets": [],
+                "n_approved": 0, "n_investigational": 0}
+
+    monkeypatch.setattr(design_disease, "build_context", no_targets)
+    job = _new_job("barejob")
+    try:
+        _run(_run_disease("barejob"))
+    finally:
+        design._jobs.pop("barejob", None)
+
+    for pool in POOLS:
+        events = [e for e in job["events"] if e["type"] == "pocket" and e["track"] == pool]
+        assert len(events) == 1
+        event = events[0]
+        # The hard guarantee: a seed with no recorded targets still gets a reason.
+        assert event["proteins"] == []
+        assert event["text"], f"{pool}: pocket event with neither proteins nor a reason"
+        assert "pocket" not in event  # none was found, so none is claimed
+
+
+def test_a_seed_with_no_targets_still_gets_a_real_reason():
+    """The wording the page shows, from the real lookup rather than a stub."""
+    pocket, note, used = _run(_load_pocket("CHEMBL1", [], "CCO"), timeout=20)
+    assert pocket is None and used is None
+    assert note and "nothing here tests whether a molecule fits the target" in note
+    shown, told = pocket_lines(pocket, note, "Testdrug")
+    assert shown == note, "the reason must reach the event, not be dropped"
+    assert told == "", "nothing may be told to the model about a pocket there is none of"
