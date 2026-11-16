@@ -189,10 +189,8 @@ async def _run_disease(job_id: str) -> None:
                              return_exceptions=True)
 
         tried, accepted = _counts(job["tracks"])
-        job["status"] = "done"
-        _emit(job, "done", tried=tried, accepted=accepted)
 
-        # Cached only if something survived. A run where every track failed has
+        # Saved only if something survived. A run where every track failed has
         # nothing in it worth keeping, and every cause of all three failing at
         # once is shared and temporary -- the key, a rate limit, the model being
         # down -- rather than anything about this disease. Caching that would
@@ -200,11 +198,16 @@ async def _run_disease(job_id: str) -> None:
         # later visitor. A partial run is kept: two good tracks are worth having
         # and the third reports its own failure.
         survived = [p for p, t in job["tracks"].items() if t["status"] == "done"]
-        if survived:
-            cache.put(SOURCE, job["key"], _public(job))
-        else:
+        if not survived:
+            # Said before `done`, which a reader may treat as the last word.
             _emit(job, "note", text="Every track failed, so nothing was saved. Designing "
                                     "again will start a fresh run rather than show you this.")
+
+        job["status"] = "done"
+        _emit(job, "done", tried=tried, accepted=accepted)
+        if survived:
+            # After the `done` event, so a cached run replays as a finished one.
+            cache.put(SOURCE, job["key"], _public(job))
         log.info("disease design %s: %d attempts, %d accepted, tracks %s, %s",
                  job["disease_id"], tried, accepted,
                  {p: t["status"] for p, t in job["tracks"].items()},

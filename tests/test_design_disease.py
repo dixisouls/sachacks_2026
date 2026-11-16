@@ -472,3 +472,42 @@ def test_two_diseases_do_not_share_a_run(route):
     finally:
         for jid in ids:
             design._jobs.pop(jid, None)
+
+
+def test_done_is_the_last_event_and_a_cached_run_replays_as_finished(stub, monkeypatch):
+    """Order matters at both ends of the finish.
+
+    `done` must be last, because a reader may treat it as the last word, and the
+    cache must be written after it, or a cached run replays without ever saying
+    it finished.
+    """
+    saved = []
+    monkeypatch.setattr(design_disease.cache, "put", lambda *a: saved.append(a))
+    job = _new_job("orderjob")
+    try:
+        _run(_run_disease("orderjob"))
+    finally:
+        design._jobs.pop("orderjob", None)
+
+    assert job["events"][-1]["type"] == "done"
+    cached = saved[0][2]
+    assert cached["events"][-1]["type"] == "done"
+    assert cached["status"] == "done"
+
+
+def test_the_all_failed_note_arrives_before_done(stub, monkeypatch):
+    async def explode(job, context, pocket, note, *, attempts, track=None, id_prefix=""):
+        raise RuntimeError("the model is down")
+
+    monkeypatch.setattr(design_disease, "run_rounds", explode)
+    job = _new_job("notejob")
+    try:
+        _run(_run_disease("notejob"))
+    finally:
+        design._jobs.pop("notejob", None)
+
+    kinds = [e["type"] for e in job["events"]]
+    note = next(i for i, e in enumerate(job["events"])
+                if e["type"] == "note" and "nothing was saved" in e["text"])
+    assert note < kinds.index("done")
+    assert kinds[-1] == "done"
