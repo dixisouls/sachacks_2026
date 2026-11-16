@@ -1,6 +1,6 @@
 """Run the real three-track disease job in-process and audit its event stream.
 
-    venv/bin/python scripts/design_disease_live.py MONDO_0005301 [--fixture]
+    venv/bin/python scripts/design_disease_live.py MONDO_0005301 [--save run.json]
 
 This spends real model calls, which is the point: scripts/design_disease_check.py
 proves a disease has seeds to design from, and tests/test_design_disease.py
@@ -13,8 +13,10 @@ Every rule in DESIGN_API.md that can be checked from the outside is checked here
 against the stream the run actually produced, because a contract nobody tests is
 a document, not a contract.
 
-With --fixture the audited stream is written to api/fixtures/design_run.json for
-the frontend to build against.
+With --save it writes the whole finished job, events and all, to a file: a run
+costs real money and takes three minutes, so an audit failure is worth being
+able to read again without paying for another one. Saved whether the audit
+passed or not, which is the case you most want to keep.
 """
 
 from __future__ import annotations
@@ -172,7 +174,7 @@ def summarise(job: dict) -> None:
             print(f"  {'':16} UNJUDGED {sorted(unjudged)}")
 
 
-async def main(disease_id: str, write_fixture: bool) -> int:
+async def main(disease_id: str, save_to: str | None) -> int:
     if not config.have_llm():
         print("No GEMINI_API_KEY in .env, so there is no live run to make.")
         return 2
@@ -203,11 +205,11 @@ async def main(disease_id: str, write_fixture: bool) -> int:
     for problem in bad:
         print(f"  ! {problem}")
 
-    if write_fixture and not bad and job["status"] == "done":
-        out = ROOT / "api" / "fixtures" / "design_run.json"
+    if save_to:
+        out = Path(save_to).expanduser().resolve()
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(_public(job), indent=1))
-        print(f"\nwrote {out.relative_to(ROOT)} ({out.stat().st_size // 1024} KB)")
+        print(f"\nwrote {out} ({out.stat().st_size // 1024} KB)")
     return 1 if bad else 0
 
 
@@ -229,6 +231,7 @@ async def _watch(job: dict) -> None:
 
 
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    raise SystemExit(asyncio.run(main(args[0] if args else "MONDO_0010726",
-                                      "--fixture" in sys.argv)))
+    argv = sys.argv[1:]
+    save = argv[argv.index("--save") + 1] if "--save" in argv[:-1] else None
+    free = [a for a in argv if not a.startswith("--") and a != save]
+    raise SystemExit(asyncio.run(main(free[0] if free else "MONDO_0010726", save)))
