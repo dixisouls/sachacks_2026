@@ -333,7 +333,11 @@ def test_no_homolog_in_the_data_is_an_empty_list_not_a_missing_section(monkeypat
     assert out["offtarget"]["items"] == []
     assert "GABBR2" in out["offtarget"]["note"]
     assert "not evidence that the molecule is selective" in out["offtarget"]["note"]
-    assert "40% identity" in out["offtarget"]["note"]
+    # The note must quote the cutoffs the artifact was actually built with, not a
+    # number written here: they have moved once already, and a sentence claiming
+    # 40% about a file built at 30% is the quietly wrong number this module exists
+    # to prevent.
+    assert workup_mod.limits() in out["offtarget"]["note"]
     # The model was never asked about it, so it cannot have supplied a protein.
     assert not any("concern" in s["properties"].get("items", {})
                    .get("items", {}).get("properties", {}) for s in asked)
@@ -352,3 +356,25 @@ def test_the_homolog_lookup_searches_both_columns():
     found = homologs([gene])
     assert found, f"{gene} appears in the data but the lookup found nothing"
     assert all(0.4 <= h["identity"] <= 1.0 for h in found)
+
+
+def test_the_limits_sentence_names_every_cutoff_the_artifact_records():
+    """Each cutoff stands on its own, so a missing one does not take the others.
+
+    artifacts/meta.json records min_identity but not min_coverage, because the
+    builder passed mmseqs -c 0.6 without writing it down. Requiring both meant
+    the sentence dropped the identity cutoff it did know.
+    """
+    import json
+    from api.workup import ARTIFACTS
+
+    meta = json.loads((ARTIFACTS / "meta.json").read_text()).get("homology", {})
+    sentence = workup_mod.limits()
+    assert "drug-target proteins against proteins already associated" in sentence
+    for key in ("min_identity", "min_coverage"):
+        value = meta.get(key)
+        if isinstance(value, (int, float)):
+            assert f"{value:.0%}" in sentence, f"{key} is recorded but not stated"
+    if not any(isinstance(meta.get(k), (int, float))
+               for k in ("min_identity", "min_coverage")):
+        assert "strong, long alignments" in sentence

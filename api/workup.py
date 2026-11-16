@@ -378,12 +378,41 @@ async def _admet(track: dict[str, Any], context: dict[str, Any]) -> dict[str, An
 
 # ── 3. off-target ────────────────────────────────────────────────────────────
 
-# What the sequence layer can and cannot see, said once and quoted wherever the
-# section is thin. Both numbers are the defaults scripts/build_similarity.py ran
-# with, and the asymmetry is the shape of the search it ran.
-LIMITS = ("The comparison behind it keeps pairs above 40% identity over 60% of the "
-          "sequence, and it searched drug-target proteins against proteins already "
-          "associated with a disease, so a protein outside both sets cannot appear.")
+@lru_cache(maxsize=1)
+def limits() -> str:
+    """What the sequence layer can and cannot see, in one sentence.
+
+    Said once and quoted wherever the section is thin, and the cutoffs are read
+    out of the artifact's own metadata rather than written here. They have
+    already moved once, from 40% identity to 30%, and a sentence in the product
+    that says 40% about a file built at 30% is exactly the quietly wrong number
+    this module exists to prevent: nothing would fail, and the page would
+    misdescribe its own evidence.
+
+    The asymmetry at the end is the shape of the search that was run, not a
+    cutoff, so it is stated whatever the metadata says.
+    """
+    side = ("it searched drug-target proteins against proteins already associated with a "
+            "disease, so a protein outside both sets cannot appear")
+    try:
+        meta = json.loads((ARTIFACTS / "meta.json").read_text())["homology"]
+    except (OSError, ValueError, KeyError, TypeError):
+        meta = {}
+
+    # Each cutoff stands or falls on its own. Requiring both meant the sentence
+    # dropped the identity cutoff it did know whenever coverage was absent --
+    # which is every artifact built so far, because build_similarity.py passed
+    # mmseqs -c 0.6 without recording it. Dropping a number we cannot stand
+    # behind is right; dropping one we can is just less true.
+    kept = []
+    identity, coverage = meta.get("min_identity"), meta.get("min_coverage")
+    if isinstance(identity, (int, float)):
+        kept.append(f"above {identity:.0%} identity")
+    if isinstance(coverage, (int, float)):
+        kept.append(f"over {coverage:.0%} of the sequence")
+    if not kept:
+        return f"The comparison behind it keeps only strong, long alignments, and {side}."
+    return f"The comparison behind it keeps pairs {' '.join(kept)}, and {side}."
 
 
 @lru_cache(maxsize=1)
@@ -421,9 +450,12 @@ def homologs(gene_ids: list[str], limit: int = 6) -> list[dict[str, Any]]:
     and looking only at the query column throws away half the data.
 
     Two limits worth knowing, both reported by the caller rather than papered
-    over: the file holds pairs above 40% identity with 60% coverage, and its
+    over: the file holds only pairs above the identity and coverage cutoffs it
+    was built with (see limits(), which reads them from the artifact), and its
     far side is only proteins associated with some disease. So an empty result
     means nothing close enough was recorded, not that the protein is selective.
+    SIGMAR1 is the standing example: it has no human paralog at any cutoff worth
+    using, so no rebuild will ever give it a relative.
     """
     wanted = {g for g in gene_ids if g}
     if not wanted:
@@ -500,7 +532,7 @@ async def _offtarget(track: dict[str, Any], context: dict[str, Any]) -> dict[str
         return {"items": [], "note": (
             f"No protein in the sequence data resembles "
             f"{symbols or 'the targets recorded for this drug'} closely enough to be listed. "
-            f"{LIMITS} So this is a gap in the data, not evidence that the molecule is "
+            f"{limits()} So this is a gap in the data, not evidence that the molecule is "
             "selective: no one has tested it against anything.")}
 
     lines = [f"- {h['symbol']}"
@@ -532,7 +564,7 @@ async def _offtarget(track: dict[str, Any], context: dict[str, Any]) -> dict[str
     note = str(parsed.get("note", "")).strip()
     honest = ("Identities are measured sequence identity from artifacts/homolog_pairs.parquet. "
               "A similar sequence is a reason to check a protein, not evidence that this "
-              f"molecule binds it: nothing here was tested against any of them. {LIMITS}")
+              f"molecule binds it: nothing here was tested against any of them. {limits()}")
     return {"items": items, "note": f"{note} {honest}".strip() if note else honest}
 
 
