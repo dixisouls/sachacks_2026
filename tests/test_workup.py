@@ -144,8 +144,10 @@ def test_case_floor_always_says_the_three_things():
     assert "never been made" in joined
     assert "placement, not a docking" in joined
     assert "4MS3" in joined and "Baclofen" in joined
-    # The low-bar line must quote the measured rate, not a remembered one.
-    assert f"{chemcheck.RANDOM_PASS_RATE:.0%}" in joined
+    # The low-bar line must quote the measured rate, not a remembered one, and at
+    # the same precision the job reports it, so 81.5% never sits next to 82%.
+    assert f"{chemcheck.RANDOM_PASS_RATE:.1%}" in joined
+    assert "81.5%" in joined and "82%" not in joined
     assert f"{round(chemcheck.RANDOM_PASS_RATE * 200)} of 200" in joined
 
 

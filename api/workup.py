@@ -556,8 +556,10 @@ def case_floor(track: dict[str, Any]) -> list[str]:
     floor = [
         "Nothing here tests whether this molecule binds anything. No assay has been run, "
         "and the molecule has never been made.",
+        # One decimal, because the job reports random_pass_rate as 0.815 and a
+        # reader should not see 82% here and 81.5% beside it.
         f"Passing these checks is a low bar: {passed} of 200 molecules drawn at random from "
-        f"the drug library pass them too ({rate:.0%}), and so does the drug this was designed "
+        f"the drug library pass them too ({rate:.1%}), and so does the drug this was designed "
         "from.",
     ]
     placed = (track.get("best") or {}).get("check", {}).get("properties", {}).get("pocket")

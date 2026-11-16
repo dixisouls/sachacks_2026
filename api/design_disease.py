@@ -191,10 +191,24 @@ async def _run_disease(job_id: str) -> None:
         tried, accepted = _counts(job["tracks"])
         job["status"] = "done"
         _emit(job, "done", tried=tried, accepted=accepted)
-        cache.put(SOURCE, job["key"], _public(job))
-        log.info("disease design %s: %d attempts, %d accepted, tracks %s",
+
+        # Cached only if something survived. A run where every track failed has
+        # nothing in it worth keeping, and every cause of all three failing at
+        # once is shared and temporary -- the key, a rate limit, the model being
+        # down -- rather than anything about this disease. Caching that would
+        # turn five bad minutes into a disease whose page stays broken for every
+        # later visitor. A partial run is kept: two good tracks are worth having
+        # and the third reports its own failure.
+        survived = [p for p, t in job["tracks"].items() if t["status"] == "done"]
+        if survived:
+            cache.put(SOURCE, job["key"], _public(job))
+        else:
+            _emit(job, "note", text="Every track failed, so nothing was saved. Designing "
+                                    "again will start a fresh run rather than show you this.")
+        log.info("disease design %s: %d attempts, %d accepted, tracks %s, %s",
                  job["disease_id"], tried, accepted,
-                 {p: t["status"] for p, t in job["tracks"].items()})
+                 {p: t["status"] for p, t in job["tracks"].items()},
+                 f"cached ({len(survived)} track(s) survived)" if survived else "not cached")
 
     except Exception as exc:  # noqa: BLE001 - the job must report, never vanish
         log.exception("disease design job failed")

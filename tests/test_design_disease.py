@@ -315,6 +315,58 @@ def test_the_public_job_carries_the_three_tracks_and_no_internals(stub):
         assert field in track, field
 
 
+def test_a_run_where_every_track_failed_is_not_cached(stub, monkeypatch):
+    """Caching that would make a transient outage permanent for one disease.
+
+    Every cause of all three tracks failing at once is shared and temporary, so
+    the run holds nothing worth keeping and keeping it would break the page for
+    every later visitor until someone chose to spend a run.
+    """
+    async def explode(job, context, pocket, note, *, attempts, track=None, id_prefix=""):
+        raise RuntimeError("the model is down")
+
+    saved = []
+    monkeypatch.setattr(design_disease, "run_rounds", explode)
+    monkeypatch.setattr(design_disease.cache, "put", lambda *a: saved.append(a))
+    job = _new_job("deadjob")
+    try:
+        _run(_run_disease("deadjob"))
+    finally:
+        design._jobs.pop("deadjob", None)
+
+    assert job["status"] == "done"
+    assert all(t["status"] == "error" for t in job["tracks"].values())
+    assert saved == [], "an all-failed run was cached"
+    assert any(e["type"] == "note" and "nothing was saved" in e["text"]
+               for e in job["events"])
+
+
+def test_a_partly_failed_run_is_still_cached(stub, monkeypatch):
+    """Two good tracks are worth keeping, whatever the third did."""
+    real = design_disease.run_rounds
+
+    async def one_bad(job, context, pocket, note, *, attempts, track=None, id_prefix=""):
+        if track == "all":
+            raise RuntimeError("just this one")
+        return await real(job, context, pocket, note, attempts=attempts, track=track,
+                          id_prefix=id_prefix)
+
+    saved = []
+    monkeypatch.setattr(design_disease, "run_rounds", one_bad)
+    monkeypatch.setattr(design_disease.cache, "put", lambda *a: saved.append(a))
+    job = _new_job("partjob")
+    try:
+        _run(_run_disease("partjob"))
+    finally:
+        design._jobs.pop("partjob", None)
+
+    assert len(saved) == 1, "a run with two good tracks was thrown away"
+    cached = saved[0][2]
+    assert cached["tracks"]["approved"]["best"] is not None
+    assert cached["tracks"]["all"]["status"] == "error"
+
+
+
 # ── idempotency, which the page depends on ───────────────────────────────────
 # The disease page POSTs on every mount with force=false, so "never start a
 # second run" is not an optimisation here: if it breaks, every navigation spends
