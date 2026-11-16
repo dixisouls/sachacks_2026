@@ -656,15 +656,11 @@ async def run_rounds(job: dict[str, Any], context: dict[str, Any],
                                 k: fit[k] for k in
                                 ("pdb_id", "clashes", "atoms", "rmsd", "core_atoms", "closest_A")}
                             check["pose_sdf"] = fit["sdf"]
-                    # the worst check still decides, now that fit may be one of them
-                    statuses = [c["status"] for c in check["checks"]]
-                    check["status"] = ("fail" if "fail" in statuses
-                                       else "warn" if "warn" in statuses else "pass")
-                    failed = [c["problem"] for c in check["checks"] if c["status"] == "fail"]
-                    warned = [c["problem"] for c in check["checks"] if c["status"] == "warn"]
-                    check["summary"] = ("Passes every check." if check["status"] == "pass"
-                                        else "Rejected: " + "; ".join(failed) + "." if failed
-                                        else "Usable, but " + "; ".join(warned) + ".")
+                    # The worst check still decides, now that fit may be one of
+                    # them, and the sentence comes from the same place as before
+                    # it was one. Rewriting it here is what let the two copies
+                    # drift into claiming a target test that never happened.
+                    check["status"], check["summary"] = chemcheck.summarise(check["checks"])
 
             attempt = {"id": attempt_id, "round": round_no, "name": name,
                        "rationale": proposal.get("rationale", ""),

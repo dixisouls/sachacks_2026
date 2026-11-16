@@ -316,14 +316,7 @@ def evaluate(smiles: str, parent_smiles: str | None = None,
                          else f"may be too unlike {shown} to hit the same protein"),
             ))
 
-    worst: Status = ("fail" if any(c["status"] == "fail" for c in checks)
-                     else "warn" if any(c["status"] == "warn" for c in checks) else "pass")
-    failed = [c["problem"] for c in checks if c["status"] == "fail"]
-    warned = [c["problem"] for c in checks if c["status"] == "warn"]
-    summary = ("Passes every check." if worst == "pass"
-               else "Rejected: " + "; ".join(failed) + "." if failed
-               else "Usable, but " + "; ".join(warned) + ".")
-
+    worst, summary = summarise(checks)
     return {
         "smiles": canonical,
         "valid": True,
@@ -332,6 +325,33 @@ def evaluate(smiles: str, parent_smiles: str | None = None,
         "checks": checks,
         "properties": properties,
     }
+
+
+def summarise(checks: list[dict[str, Any]]) -> tuple[Status, str]:
+    """The worst of these checks, and the one sentence that goes on the card.
+
+    One copy, because there were two: evaluate() wrote this sentence and
+    api/design.py rewrote it after adding the pocket check, and the two drifted
+    the moment the pocket check stopped always being there.
+
+    The sentence has to be honest about what was not run and not only about what
+    failed. A molecule designed from a drug with no measured structure is never
+    tested against a protein at all, and on a card -- which is what gets
+    screenshotted and read on its own -- "Passes every check." claimed more than
+    the run did. The wording matches the caption on the track and the floor fact
+    in `case.against`, so all three say it the same way.
+    """
+    worst: Status = ("fail" if any(c["status"] == "fail" for c in checks)
+                     else "warn" if any(c["status"] == "warn" for c in checks) else "pass")
+    if worst == "pass":
+        # A pocket check is present only when a measured position was found.
+        tested = any(c["id"] == "pocket" for c in checks)
+        return worst, ("Passes every check." if tested else
+                       "Passes every check that was run; nothing tested it against the target.")
+    failed = [c["problem"] for c in checks if c["status"] == "fail"]
+    warned = [c["problem"] for c in checks if c["status"] == "warn"]
+    return worst, ("Rejected: " + "; ".join(failed) + "." if failed
+                   else "Usable, but " + "; ".join(warned) + ".")
 
 
 def feedback_line(name: str, result: dict[str, Any]) -> str:

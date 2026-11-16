@@ -74,9 +74,47 @@ def test_with_no_pocket_the_molecule_is_not_judged_against_one(loop):
     assert [c["id"] for c in check["checks"]] == ["qed"], \
         "a molecule was judged against a pocket that does not exist"
     assert check["status"] == "pass"
-    assert check["summary"] == "Passes every check."
     assert "pocket" not in check["properties"]
     assert "pose_sdf" not in check
+
+
+def test_the_summary_says_what_was_not_run(loop, monkeypatch):
+    """A card is read on its own, so it cannot claim a test that never happened.
+
+    Passing with no pocket and passing with one are different facts about a
+    molecule and the sentence on the card has to tell them apart. "Passes every
+    check." beside a molecule nothing tested against a protein was the one
+    overclaim left after the pocket check stopped being appended.
+    """
+    _, without = _run_once(None, "no measured structure exists")
+
+    monkeypatch.setattr(design.pocket_mod, "place", lambda smiles, pocket: {
+        "pdb_id": "4MS3", "resolution_A": 2.1, "core_atoms": 9, "rmsd": 0.4,
+        "atoms": 14, "clashes": 0, "closest_A": 3.6, "sdf": "SDF"})
+    _, with_pocket = _run_once(FakePocket(), None)
+
+    bare, placed = without[0]["check"], with_pocket[0]["check"]
+    assert bare["status"] == placed["status"] == "pass"
+    assert bare["summary"] != placed["summary"], \
+        "the same sentence for a molecule tested against the target and one not"
+    assert placed["summary"] == "Passes every check."
+    assert bare["summary"] == ("Passes every check that was run; nothing tested it "
+                              "against the target.")
+    # The same wording wherever the product says it, so the three cannot drift.
+    assert "tested it against the target" in bare["summary"]
+
+
+def test_the_seed_is_summarised_the_same_way(loop):
+    """chemcheck.evaluate() is the other copy of that sentence; it agrees.
+
+    The seed and the baseline go through evaluate() directly and are never
+    placed in a pocket either, so they must not claim to have been.
+    """
+    status, summary = chemcheck.summarise(
+        [{"id": "qed", "label": "l", "status": "pass", "value": "v",
+          "detail": "d", "problem": "p"}])
+    assert status == "pass"
+    assert summary.endswith("nothing tested it against the target.")
 
 
 def test_the_absence_of_a_structure_is_still_said_once_on_the_stream(loop):
@@ -159,3 +197,47 @@ def test_feedback_line_survives_every_check_the_loop_can_build(loop, monkeypatch
     job, attempts = _run_once(FakePocket(), None)
     for attempt in attempts:
         chemcheck.feedback_line(attempt["name"], attempt["check"])  # must not raise
+
+
+# ── a molecule that lands inside the protein ─────────────────────────────────
+
+def test_enough_overlap_with_the_protein_fails_the_molecule(loop, monkeypatch):
+    """The one check that knows which protein is being aimed at can still reject."""
+    monkeypatch.setattr(design.pocket_mod, "place", lambda smiles, pocket: {
+        "pdb_id": "4MS3", "resolution_A": 2.1, "core_atoms": 6, "rmsd": 0.4,
+        "atoms": 20, "clashes": 9, "closest_A": 1.1, "sdf": "SDF"})
+    job, attempts = _run_once(FakePocket(), None)
+    check = attempts[0]["check"]
+
+    assert check["status"] == "fail", "a molecule sitting inside the protein passed"
+    assert check["properties"]["pocket"]["clashes"] == 9
+    assert "does not fit" in check["summary"] or "Rejected" in check["summary"]
+
+
+# ── a round the model fails to answer ────────────────────────────────────────
+
+def test_a_round_that_fails_does_not_end_the_run(monkeypatch):
+    """One bad round costs a round, not the track, and the next one is told."""
+    monkeypatch.setattr(design, "ROUNDS", 2)
+    monkeypatch.setattr(design, "PER_ROUND", 1)
+    calls = []
+
+    async def fake(job, prompt, track=None):
+        calls.append(prompt)
+        if len(calls) == 1:
+            raise RuntimeError("the model fell over")
+        return {"reasoning": "r", "molecules": [
+            {"name": "M1", "smiles": "CCO", "rationale": "r", "builds_on": "Baclofen"}]}
+
+    monkeypatch.setattr(design, "_propose", fake)
+    monkeypatch.setattr(design.chemcheck, "evaluate", lambda mol, *a, **k: {
+        "smiles": mol, "valid": True, "status": "pass", "summary": "s",
+        "checks": [], "properties": {}})
+
+    job, attempts = _run_once(None, "no structure")
+
+    assert len(attempts) == 1, "the second round did not run"
+    assert any(e["type"] == "note" and "did not return usable molecules" in e["text"]
+               for e in job["events"])
+    # The failure was handed to the next round rather than hidden from it.
+    assert "round 1 produced nothing usable" in calls[1]
