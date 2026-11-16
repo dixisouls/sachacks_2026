@@ -7,7 +7,19 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export default function Molecule2D({ smiles, className }: { smiles: string; className?: string }) {
+export default function Molecule2D({
+  smiles,
+  className,
+  width = 320,
+  height = 240,
+}: {
+  smiles: string;
+  className?: string;
+  /** The drawing's own coordinate space. Larger means finer detail when the
+   *  svg is scaled up to fill a big panel. */
+  width?: number;
+  height?: number;
+}) {
   const ref = useRef<SVGSVGElement>(null);
   const [failed, setFailed] = useState(false);
 
@@ -18,7 +30,7 @@ export default function Molecule2D({ smiles, className }: { smiles: string; clas
     if (!smiles || !el) return;
     import("smiles-drawer").then(({ default: SmilesDrawer }) => {
       if (cancelled || !el) return;
-      const drawer = new SmilesDrawer.SvgDrawer({ width: 320, height: 240 });
+      const drawer = new SmilesDrawer.SvgDrawer({ width, height });
       SmilesDrawer.parse(
         smiles,
         (tree: unknown) => !cancelled && drawer.draw(tree, el, "light"),
@@ -29,7 +41,7 @@ export default function Molecule2D({ smiles, className }: { smiles: string; clas
       cancelled = true;
       el?.replaceChildren();
     };
-  }, [smiles]);
+  }, [smiles, width, height]);
 
   if (failed) {
     return (

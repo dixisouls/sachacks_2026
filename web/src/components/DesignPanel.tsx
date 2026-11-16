@@ -8,16 +8,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { designStreamUrl, getDesign, startDesign, USE_MOCKS } from "@/lib/api";
-import type { CheckStatus, DesignAttempt, DesignEvaluation, DesignEvent, DesignJob } from "@/lib/types";
+import type { DesignAttempt, DesignEvaluation, DesignEvent, DesignJob } from "@/lib/types";
+import { CheckList, Verdict } from "./checks";
 import ErrorCard from "./ErrorCard";
 import Molecule2D from "./Molecule2D";
 import PoseViewer from "./PoseViewer";
-
-const TONE: Record<CheckStatus, { dot: string; chip: string; word: string }> = {
-  pass: { dot: "bg-[#0B7A69]", chip: "bg-mint text-accent-ink", word: "Nothing wrong found" },
-  warn: { dot: "bg-[#B07A00]", chip: "bg-[#FBEFD9] text-[#6B4A06]", word: "Questions" },
-  fail: { dot: "bg-[#C8452A]", chip: "bg-[#FBE4DE] text-[#8A2A14]", word: "Rejected" },
-};
 
 export default function DesignPanel({
   drugId,
@@ -136,7 +131,7 @@ export default function DesignPanel({
             <h3 id="best-h" className="text-[18px] font-bold tracking-[-0.015em]">
               Best of {attempts.length}: {best.name}
             </h3>
-            <Badge status={best.check.status} />
+            <Verdict status={best.check.status} />
           </div>
           <AttemptBody attempt={best} big parentName={job?.parent?.name} />
         </section>
@@ -328,7 +323,7 @@ function WhatPassingMeans({
             <dt className="text-[13px] text-muted">The drug it was designed from</dt>
             <dd className="mt-1 flex items-center gap-2 text-[15px] font-semibold">
               {parent.name}
-              {parentStatus && <Badge status={parentStatus} />}
+              {parentStatus && <Verdict status={parentStatus} />}
             </dd>
             <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
               {parentStatus === "pass"
@@ -350,16 +345,6 @@ function WhatPassingMeans({
         )}
       </dl>
     </section>
-  );
-}
-
-function Badge({ status }: { status: CheckStatus }) {
-  const tone = TONE[status];
-  return (
-    <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[12.5px] font-semibold ${tone.chip}`}>
-      <span className={`h-2 w-2 rounded-full ${tone.dot}`} />
-      {tone.word}
-    </span>
   );
 }
 
@@ -393,7 +378,7 @@ function AttemptRow({ attempt, isBest, open, onToggle, parentName }: {
           </span>
           <span className="truncate text-[13px] text-muted">{attempt.check.summary}</span>
         </span>
-        <Badge status={attempt.check.status} />
+        <Verdict status={attempt.check.status} />
         <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" className={`shrink-0 text-faint transition-transform ${open ? "rotate-180" : ""}`}>
           <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -441,25 +426,13 @@ function AttemptBody({ attempt, big = false, parentName }: {
           pdbId={pose.pdb_id}
           sdf={check.pose_sdf}
           clashes={pose.clashes}
+          closestA={pose.closest_A}
           drugName={parentName ?? "the original drug"}
+          moleculeName={attempt.name}
         />
       )}
 
-      {check.checks.length > 0 && (
-        <ul className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
-          {check.checks.map((item) => (
-            <li key={item.id} className="flex items-start gap-2 text-[13.5px]" title={item.detail}>
-              <span className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${TONE[item.status].dot}`} />
-              <span className="min-w-0">
-                <span className={item.status === "pass" ? "" : "font-semibold"}>
-                  {item.status === "pass" ? item.label : item.problem}
-                </span>{" "}
-                <span className="text-muted">{item.value}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <CheckList checks={check.checks} />
     </div>
   );
 }
