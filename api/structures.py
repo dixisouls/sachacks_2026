@@ -289,6 +289,10 @@ def _drug_label(name: str | None, drug_id: str) -> str:
     return name.capitalize() if name else drug_id
 
 
+# v2: prefers a measured structure of the protein over an AlphaFold prediction.
+PLAN_VERSION = "v2"
+
+
 async def build_structure_plan(drug_id: str, gene_id: str,
                                lookup: StructureLookup | None = None) -> StructurePlan:
     lookup = lookup or get_lookup()
@@ -299,7 +303,12 @@ async def build_structure_plan(drug_id: str, gene_id: str,
     if gene is None:
         raise KeyError(f"unknown gene_id {gene_id}")
 
-    plan_path = _cache_path("plans", f"{drug_id}__{gene_id}.json")
+    # The version belongs in the filename. A plan is the answer the lookup gave,
+    # not a fact about the pair, so changing how the lookup decides invalidates
+    # every plan already on disk. Without this, improving the lookup silently
+    # keeps serving the old answer: v1 plans say AlphaFold for proteins that
+    # have had an experimental structure in the PDB all along.
+    plan_path = _cache_path("plans", f"{drug_id}__{gene_id}__{PLAN_VERSION}.json")
     if plan_path.exists():
         return StructurePlan.model_validate_json(plan_path.read_text())
 
