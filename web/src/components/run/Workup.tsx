@@ -61,7 +61,10 @@ export default function Workup({
 }
 
 const TITLE: Record<WorkupKind, string> = {
-  synthesis: "How it would be made",
+  // "Possible routes", not "how it is made": the difficulty figure beside it is
+  // computed, but the steps themselves are the model's suggestion and no tool
+  // has checked that the reactions work or that the materials can be bought.
+  synthesis: "Possible routes",
   admet: "What the body would do to it",
   offtarget: "What else it might hit",
   case: "The case for taking it forward",
