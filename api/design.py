@@ -149,11 +149,16 @@ def _job_key(drug_id: str, disease_id: str) -> str:
     return f"{drug_id}|{disease_id}|{config.GEMINI_MODEL}|v2"
 
 
-def _emit(job: dict[str, Any], kind: str, track: str | None = None, **payload: Any) -> None:
+def _emit(job: dict[str, Any], kind: str, /, track: str | None = None,
+          **payload: Any) -> None:
     """Append one event. The index lets a reconnecting client replay the rest.
 
     `track` names which of a disease run's three tracks the event belongs to, and
     is left off job-level events entirely.
+
+    `job` and `kind` are positional-only because a `workup` event carries a field
+    of its own called `kind` (which of the four sections it is), and without the
+    slash that field collides with this parameter and raises.
 
     This is deliberately a plain function and not a coroutine. Three tracks run
     concurrently on one event list, and `i` has to be unique and increasing
@@ -421,6 +426,26 @@ async def _load_pocket(
     return None, note, None
 
 
+def pocket_lines(pocket: pocket_mod.Pocket | None, note: str | None,
+                 parent_name: str) -> tuple[str, str]:
+    """What to tell the reader about the pocket, and what to tell the model.
+
+    Both the per-drug run and every track of a disease run say this, and the
+    wording matters: it is where the product admits that a placement is not a
+    docking. One copy, so the two cannot drift apart.
+    """
+    if pocket is None:
+        return note or "", ""
+    shown = (f"Found {parent_name} inside its target in {pocket.pdb_id}"
+             + (f" at {pocket.resolution_A} A" if pocket.resolution_A else "")
+             + ". Every molecule will be placed there to see whether it fits.")
+    told = (f"\n\nA crystal structure ({pocket.pdb_id}) records exactly where {parent_name} sits "
+            "inside its target. Every molecule you propose will be laid onto that position by its "
+            "shared core, and any atom that ends up inside the protein counts against it. Keep "
+            "the core that binds, and grow into open space rather than into the protein.")
+    return shown, told
+
+
 async def _propose(job: dict[str, Any], prompt: str, track: str | None = None) -> dict[str, Any]:
     """One model call, streamed so the page has something to show while it thinks."""
     from google import genai
@@ -505,22 +530,13 @@ async def _run(job_id: str) -> None:
               parent=job["parent"],
               targets=[t["symbol"] for t in context["targets"]])
 
-        pocket, pocket_note = await _load_pocket(
+        pocket, pocket_note, _ = await _load_pocket(
             job["drug_id"], context["targets"], context["parent_smiles"])
         job["pocket"] = ({"pdb_id": pocket.pdb_id, "resolution_A": pocket.resolution_A}
                          if pocket else None)
-        _emit(job, "pocket", text=(
-            f"Found {context['parent_name']} inside its target in {pocket.pdb_id}"
-            + (f" at {pocket.resolution_A} A" if pocket.resolution_A else "")
-            + ". Every molecule will be placed there to see whether it fits."
-        ) if pocket else pocket_note)
-        if pocket:
-            context["text"] += (
-                f"\n\nA crystal structure ({pocket.pdb_id}) records exactly where "
-                f"{context['parent_name']} sits inside its target. Every molecule you propose will "
-                "be laid onto that position by its shared core, and any atom that ends up inside "
-                "the protein counts against it. Keep the core that binds, and grow into open space "
-                "rather than into the protein.")
+        shown, told = pocket_lines(pocket, pocket_note, context["parent_name"])
+        _emit(job, "pocket", text=shown)
+        context["text"] += told
 
         await run_rounds(job, context, pocket, pocket_note, attempts=job["attempts"])
 

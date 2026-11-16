@@ -35,6 +35,7 @@ from api.scoring import Scorer
 from api.search import DiseaseSearch
 from api.compare import router as compare_router
 from api.design import router as design_router
+from api.design_disease import router as disease_design_router
 from api.profile import router as profile_router
 from api.structures import router as structures_router
 
@@ -94,6 +95,10 @@ app.include_router(structures_router)
 app.include_router(compare_router)
 # designs a new molecule from a ranked drug, checked with RDKit (api/design.py)
 app.include_router(design_router)
+# the same, three times at once over three pools of prior art (api/design_disease.py).
+# Included after design_router so GET /api/design/{job_id} and its stream, which
+# serve both kinds of job out of the one store, are already registered.
+app.include_router(disease_design_router)
 # structured drug facts and cohort comparison, assembled as model input (api/profile.py)
 app.include_router(profile_router)
 
