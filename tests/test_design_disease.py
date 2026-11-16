@@ -411,7 +411,6 @@ def test_two_diseases_do_not_share_a_run(route):
     ids = []
     try:
         one = _post("MONDO_0000001")
-        design_disease.main_scorer = None
         from api import main
         main.state["scorer"].disease_idx["MONDO_0000002"] = 1
         two = _post("MONDO_0000002")
