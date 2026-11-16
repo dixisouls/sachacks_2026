@@ -8,7 +8,7 @@ import { getEval } from "@/lib/api";
 import type { EvalMetrics } from "@/lib/types";
 
 const METHOD_LABEL: Record<string, string> = {
-  repurposekg: "RepurposeKG (shipped)",
+  repurposekg: "Scaffold (shipped)",
   graph_plus_chem: "Graph paths + chemical",
   graph_only: "Graph paths only",
   graph_plus_homolog: "Graph paths + homology",

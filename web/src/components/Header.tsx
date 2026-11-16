@@ -10,7 +10,7 @@ export default function Header() {
   const inApp = path.startsWith("/app") || path.startsWith("/d/");
   const items: [string, string, boolean][] = [
     ["/", "How it works", path === "/"],
-    ["/app", "Find drugs", inApp],
+    ["/app", "Design molecules", inApp],
     ["/validation", "Does it work?", path === "/validation"],
   ];
   return (
@@ -18,7 +18,7 @@ export default function Header() {
       <div className="mx-auto grid h-16 max-w-[1280px] grid-cols-[1fr_auto] items-center gap-4 px-4 sm:px-8 md:grid-cols-[1fr_auto_1fr]">
         <Link href="/" className="flex items-center gap-2.5 justify-self-start text-[17px] font-extrabold tracking-[-0.02em]">
           <Logo />
-          RepurposeKG
+          Scaffold
         </Link>
         <nav aria-label="Main" className="flex items-center gap-1 rounded-full bg-surface p-1 shadow-soft max-md:hidden">
           {items.map(([href, label, active]) => (
@@ -47,7 +47,7 @@ export default function Header() {
             href="/app"
             className="inline-flex h-10 items-center rounded-full bg-foreground px-4 text-sm font-semibold text-surface transition-colors hover:bg-accent-ink md:hidden"
           >
-            Find drugs
+            Design
           </Link>
         </div>
       </div>

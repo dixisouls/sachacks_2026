@@ -20,9 +20,15 @@ function SectionHead({ title, children }: { title: string; children?: React.Reac
 }
 
 const STEPS = [
-  ["Name a disease", "Search 36,740 diseases by name or synonym."],
-  ["Scan the ranked drugs", "Approved drugs, best-supported first. Each shows the genes it reaches."],
-  ["Open one to see why", "The chain from drug to disease, the evidence for and against, and the 3D structure."],
+  ["Name a disease", "Search 36,740 diseases by name or synonym. The run starts as the page opens."],
+  [
+    "Three tracks design at once",
+    "One builds on approved drugs, one on compounds others tried and dropped, one on everything known. Each picks its own drug to start from.",
+  ],
+  [
+    "Judge what came out",
+    "Rejected attempts stay on screen next to the one that survived, and the ranked drugs the design learned from are one tab away.",
+  ],
 ];
 
 export default function Home() {
@@ -37,12 +43,13 @@ export default function Home() {
       {/* hero: the search is the product, so it is the hero */}
       <section className="mx-auto flex max-w-[1280px] flex-col items-center px-4 pb-20 pt-16 text-center sm:px-8 sm:pt-24">
         <h1 className="max-w-[900px] text-[clamp(46px,8vw,100px)] font-extrabold leading-[0.92] tracking-[-0.055em]">
-          Old medicines,
+          Three molecules,
           <br />
-          new reasons.
+          designed while you watch.
         </h1>
-        <p className="mt-7 max-w-[600px] text-[clamp(17px,1.6vw,20px)] leading-relaxed text-muted">
-          Name a disease. See which approved drugs might treat it, and the chain of biology that connects each one.
+        <p className="mt-7 max-w-[620px] text-[clamp(17px,1.6vw,20px)] leading-relaxed text-muted">
+          Name a disease. Scaffold picks a drug to build on, proposes molecules, throws most of them out, and keeps the
+          one that survives. None of them have ever been made.
         </p>
         <div className="mt-10 w-full max-w-[680px]">
           <DiseaseSearch />
@@ -65,14 +72,16 @@ export default function Home() {
       {/* how to read every result */}
       <section className="mx-auto max-w-[1100px] px-4 sm:px-8">
         <div className="panel px-4 py-10 sm:px-10 sm:py-14">
-          <p className="mb-10 text-center text-[17px] font-semibold tracking-[-0.01em] sm:text-[19px]">Every result is a chain you can read left to right.</p>
+          <p className="mb-10 text-center text-[17px] font-semibold tracking-[-0.01em] sm:text-[19px]">
+            What a design learns from is a chain you can read left to right.
+          </p>
           <HeroChain />
         </div>
       </section>
 
       {/* steps: a real sequence, so it is numbered */}
       <section className="mx-auto max-w-[1100px] px-4 pt-28 sm:px-8">
-        <SectionHead title="Three steps, about a minute." />
+        <SectionHead title="One disease in, three molecules out." />
         <ol className="grid gap-4 md:grid-cols-3">
           {STEPS.map(([t, d], i) => (
             <li key={t} className="flex flex-col items-center rounded-[28px] bg-surface px-6 py-8 text-center shadow-soft">
@@ -87,15 +96,17 @@ export default function Home() {
       {/* four ways */}
       <section id="how" className="mx-auto max-w-[1280px] scroll-mt-24 px-4 pt-28 sm:px-8">
         <SectionHead title="Four ways a drug can reach a disease.">
-          One real example, cannabidiol for Rett syndrome, uses all four. Pick one to trace it.
+          The design starts from whichever drug these reasons rank highest. One real example, cannabidiol for Rett
+          syndrome, uses all four. Pick one to trace it.
         </SectionHead>
         <PathExplorer />
       </section>
 
       {/* live */}
       <section className="mx-auto max-w-[760px] px-4 pt-24 sm:px-8">
-        <SectionHead title="Try it right here.">
-          Real rankings. Drugs already approved for the disease are left out, so everything you see is a new idea.
+        <SectionHead title="The evidence underneath.">
+          Existing drugs, ranked by those four reasons. This is what each track reads before it designs anything, and it
+          stays available beside the result. Drugs already approved for the disease are left out.
         </SectionHead>
         <LiveDemo />
       </section>
@@ -103,7 +114,8 @@ export default function Home() {
       {/* proof */}
       <section className="mx-auto max-w-[1100px] px-4 pt-28 sm:px-8">
         <SectionHead title="Hide what we know. See if it comes back.">
-          We removed 20% of known approved treatments from the graph and asked it to rank them back.
+          We removed 20% of known approved treatments from the graph and asked it to rank them back. This tests the
+          ranking the design starts from. It does not test the molecules that come out.
         </SectionHead>
         <div className="grid rounded-[32px] bg-surface shadow-float md:grid-cols-3">
           <Stat value={ours != null ? `${(ours * 100).toFixed(1)}%` : "…"} label="of hidden treatments come back in the top 10" accent />
@@ -120,16 +132,20 @@ export default function Home() {
       {/* principle */}
       <section className="mx-auto max-w-[1100px] px-4 pt-24 sm:px-8">
         <div className="rounded-[28px] bg-foreground px-6 py-16 text-center text-surface sm:px-14">
-          <h2 className="text-[clamp(32px,4.4vw,52px)] font-extrabold leading-[1.02] tracking-[-0.04em]">No source, no sentence.</h2>
-          <p className="mx-auto mt-5 max-w-[620px] text-[17px] leading-relaxed text-surface/75">
-            The language model explains and assembles. It never invents the biology. Every claim points to a graph edge, a
-            trial or a paper, and claims without one are removed before you see them.
+          <h2 className="text-[clamp(32px,4.4vw,52px)] font-extrabold leading-[1.02] tracking-[-0.04em]">
+            Nothing here tests binding.
+          </h2>
+          <p className="mx-auto mt-5 max-w-[640px] text-[17px] leading-relaxed text-surface/75">
+            The checks ask whether a structure is real chemistry a chemist could make. 82% of random molecules pass them,
+            and so does the approved drug each design started from. They cannot tell you whether a molecule binds
+            anything. The model explains and assembles; it never invents the biology, and every claim points to a graph
+            edge, a trial or a paper. Scaffold says all of this beside every result, not in a footnote.
           </p>
           <Link
             href="/app"
             className="mt-10 inline-flex h-12 items-center rounded-full bg-surface px-7 text-[15px] font-semibold text-foreground transition-colors hover:bg-accent-soft"
           >
-            Find drugs for a disease
+            Design molecules for a disease
           </Link>
         </div>
       </section>
