@@ -45,9 +45,13 @@ log = logging.getLogger("repurposekg.workup")
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = Path(os.environ.get("ARTIFACT_DIR", ROOT / "artifacts"))
 
-# Explaining is easier than designing, but this model still thinks against the
-# same budget (see the note in api/design.py), so the budget stays generous.
-MAX_OUTPUT_TOKENS = 16384
+# The same budget the design loop uses, and for the same reason: this model
+# thinks before it writes and the thinking is charged here (see api/brief.py).
+# 16384 was not enough. On a live run against multiple sclerosis the synthesis
+# sketch for one track spent the whole budget reasoning and returned nothing,
+# losing that section while the other three succeeded. Sketching a route is the
+# longest piece of thinking in the workup, so the budget matches the loop's.
+MAX_OUTPUT_TOKENS = 32768
 
 LABELS = {
     "synthesis": "Could a chemist make it",
@@ -96,6 +100,15 @@ async def _ask(prompt: str, schema: dict[str, Any]) -> dict[str, Any]:
     raw = (response.text or "").strip()
     if not raw:
         reason = response.candidates[0].finish_reason if response.candidates else "unknown"
+        # Worth distinguishing, because the two have different fixes and this
+        # message is shown to the reader on the failed step.
+        if str(reason).endswith("MAX_TOKENS"):
+            usage = response.usage_metadata
+            thoughts = getattr(usage, "thoughts_token_count", None) if usage else None
+            raise RuntimeError(
+                f"{config.GEMINI_MODEL} spent its whole {MAX_OUTPUT_TOKENS}-token budget "
+                f"thinking ({thoughts} tokens) and wrote nothing. Raise MAX_OUTPUT_TOKENS "
+                "in api/workup.py.")
         raise RuntimeError(f"{config.GEMINI_MODEL} returned no text (finish_reason {reason})")
     try:
         return json.loads(raw)
