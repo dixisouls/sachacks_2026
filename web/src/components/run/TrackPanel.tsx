@@ -75,6 +75,7 @@ export default function TrackPanel({
           pocket={pocket}
           pocketNote={live.pocketNote}
           seedName={seed?.name ?? ""}
+          seedDrugId={seed?.drug_id ?? ""}
           waiting={molecules.length === 0}
         />
         <Narrative live={live} running={running} capped={capped} />
