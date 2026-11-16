@@ -107,6 +107,12 @@ export NEXT_PUBLIC_API_URL="http://localhost:$API_PORT"
 set -m
 if [[ $PROD -eq 1 ]]; then
   # NEXT_PUBLIC_* is baked in at build time, so build with it already exported.
+  #
+  # .next goes first. A build left half-written by an interrupted run, or mixed
+  # with one from `npm run dev`, serves 500s with no stylesheet -- a page that
+  # looks like unstyled HTML rather than like an error, so it gets mistaken for
+  # a CSS bug. Hosting rebuilds from scratch every time; only here is it reused.
+  rm -rf web/.next
   echo "         building..."
   ( cd web && npm run build ) >> "$WEB_LOG" 2>&1 \
     || die "Frontend build failed. Last lines:

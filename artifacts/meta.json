@@ -33,10 +33,11 @@
     "drugs_with_a_look_alike": 3649
   },
   "homology": {
-    "nnz": 7519,
-    "min_identity": 0.4,
+    "nnz": 12122,
+    "min_identity": 0.3,
+    "min_coverage": 0.6,
     "max_evalue": 1e-10,
     "top_k": 10,
-    "targets_with_a_homolog": 2155
+    "targets_with_a_homolog": 2522
   }
 }

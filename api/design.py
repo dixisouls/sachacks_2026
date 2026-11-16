@@ -149,9 +149,27 @@ def _job_key(drug_id: str, disease_id: str) -> str:
     return f"{drug_id}|{disease_id}|{config.GEMINI_MODEL}|v2"
 
 
-def _emit(job: dict[str, Any], kind: str, **payload: Any) -> None:
-    """Append one event. The index lets a reconnecting client replay the rest."""
-    event = {"i": len(job["events"]), "type": kind, "at": round(time.time() - job["started"], 2), **payload}
+def _emit(job: dict[str, Any], kind: str, /, track: str | None = None,
+          **payload: Any) -> None:
+    """Append one event. The index lets a reconnecting client replay the rest.
+
+    `track` names which of a disease run's three tracks the event belongs to, and
+    is left off job-level events entirely.
+
+    `job` and `kind` are positional-only because a `workup` event carries a field
+    of its own called `kind` (which of the four sections it is), and without the
+    slash that field collides with this parameter and raises.
+
+    This is deliberately a plain function and not a coroutine. Three tracks run
+    concurrently on one event list, and `i` has to be unique and increasing
+    across all of them; reading the length and appending with no await in
+    between is what makes that true on a single event loop. Do not add one.
+    """
+    event = {"i": len(job["events"]), "type": kind,
+             "at": round(time.time() - job["started"], 2)}
+    if track:
+        event["track"] = track
+    event.update(payload)
     job["events"].append(event)
 
 
@@ -178,7 +196,7 @@ async def start(
 
     key = _job_key(drug_id, disease_id)
     if not force:
-        done = cache.load(SOURCE, key)
+        done = cache.get(SOURCE, key)
         if done:
             # stable id: the same finished run keeps its job id across restarts
             job_id = "c" + hashlib.sha256(key.encode()).hexdigest()[:11]
@@ -244,11 +262,16 @@ async def stream(job_id: str, request: Request, since: int = 0) -> StreamingResp
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+DRUG_FIELDS = ("job_id", "status", "drug_id", "disease_id", "events", "attempts", "best",
+               "parent", "pocket", "random_pass_rate", "error", "cached")
+DISEASE_FIELDS = ("job_id", "status", "disease_id", "disease_name", "tracks", "events",
+                  "random_pass_rate", "error", "cached")
+
+
 def _public(job: dict[str, Any]) -> dict[str, Any]:
-    return {k: job[k] for k in
-            ("job_id", "status", "drug_id", "disease_id", "events", "attempts", "best",
-             "parent", "pocket", "random_pass_rate", "error", "cached")
-            if k in job}
+    """The job as the client sees it. The internals (cache key, clock) stay here."""
+    fields = DISEASE_FIELDS if job.get("kind") == "disease" else DRUG_FIELDS
+    return {k: job[k] for k in fields if k in job}
 
 
 # ── the context handed to the model ──────────────────────────────────────────
@@ -260,15 +283,24 @@ def _brief_drug(row: dict[str, Any], smiles: str | None, extra: str = "") -> str
             f"targets {genes}.{extra} SMILES: {smiles or 'unknown'}")
 
 
-def build_context(drug_id: str, disease_id: str) -> dict[str, Any]:
-    """Everything known about this drug, this disease and the field around them."""
+def build_context(drug_id: str, disease_id: str, pool: str = "all",
+                  result: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Everything known about this drug, this disease and the field around them.
+
+    `pool` decides which ranked lists the model is allowed to learn from, which
+    is the only difference between the three tracks of a disease run: `approved`
+    shows only drugs already approved, `investigational` only compounds that
+    never got there, `all` shows both. Pass `result` to reuse a ranking that has
+    already been computed instead of scoring the disease again.
+    """
     from api.main import scorer
 
     s = scorer()
     smiles_of = dict(zip(s.drugs["drug_id"].to_list(), s.drugs["smiles"].to_list()))
     name_of = dict(zip(s.drugs["drug_id"].to_list(), s.drugs["name"].to_list()))
 
-    result = s.candidates(disease_id, limit=10)
+    if result is None:
+        result = s.candidates(disease_id, limit=10)
     disease = result["disease"]
     paths = s.paths(drug_id, disease_id)
 
@@ -309,17 +341,44 @@ def build_context(drug_id: str, disease_id: str) -> dict[str, Any]:
                     if own_targets else "none recorded on these paths"))
     lines.append("")
     lines.append("WHY THE GRAPH RANKED IT:")
-    lines += [f"  - {p['explanation']}." for p in paths["paths"][:6]] or ["  - no paths recorded"]
+    # A protein_homolog path carries weight 0 in the score (see DEFAULT_WEIGHTS in
+    # api/scoring.py, which explains why it is still computed). It is supporting
+    # context, so it is marked as that rather than offered to the model as a
+    # reason for the rank -- the model quotes these lines back in its rationales,
+    # and at the sequence cutoff the artifact is built with, the weakest of them
+    # are a reason to look rather than a reason to believe.
+    shown = paths["paths"][:6]
+    lines += [f"  - {p['explanation']}."
+              + (" (sequence similarity only: supporting context, not part of the score)"
+                 if p["type"] == "protein_homolog" else "")
+              for p in shown] or ["  - no paths recorded"]
 
-    lines += ["", "APPROVED DRUGS RANKED FOR THE SAME DISEASE (what already works here):"]
-    lines += [_brief_drug(c, smiles_of.get(c["drug_id"]))
-              for c in result["approved"][:10] if c["drug_id"] != drug_id] or ["  none"]
+    approved = [c for c in result["approved"][:10] if c["drug_id"] != drug_id]
+    investigational = [c for c in result["investigational"][:10] if c["drug_id"] != drug_id]
+    if pool == "approved":
+        investigational = []
+    elif pool == "investigational":
+        approved = []
 
-    lines += ["", "NOT-APPROVED COMPOUNDS RANKED FOR THE SAME DISEASE "
-                  "(chemistry already explored here, and how far it got):"]
-    lines += [_brief_drug(c, smiles_of.get(c["drug_id"]),
-                          f" Reached phase {c['max_phase']}." if c.get("max_phase") is not None else "")
-              for c in result["investigational"][:10]] or ["  none"]
+    if pool != "investigational":
+        lines += ["", "APPROVED DRUGS RANKED FOR THE SAME DISEASE (what already works here):"]
+        lines += [_brief_drug(c, smiles_of.get(c["drug_id"])) for c in approved] or ["  none"]
+
+    if pool != "approved":
+        lines += ["", "NOT-APPROVED COMPOUNDS RANKED FOR THE SAME DISEASE "
+                      "(chemistry already explored here, and how far it got):"]
+        lines += [_brief_drug(c, smiles_of.get(c["drug_id"]),
+                              f" Reached phase {c['max_phase']}."
+                              if c.get("max_phase") is not None else "")
+                  for c in investigational] or ["  none"]
+
+    if pool == "approved":
+        lines += ["", "You are being shown approved drugs only. Build on chemistry that has "
+                      "already cleared safety in people."]
+    elif pool == "investigational":
+        lines += ["", "You are being shown compounds that never reached approval. Build on "
+                      "chemistry others explored and dropped, and aim at the weakness that "
+                      "plausibly stopped them."]
 
     return {
         "text": "\n".join(lines),
@@ -327,16 +386,21 @@ def build_context(drug_id: str, disease_id: str) -> dict[str, Any]:
         "parent_name": parent_name,
         "disease_name": disease["name"],
         "targets": own_targets,
-        "n_approved": len(result["approved"]),
-        "n_investigational": len(result["investigational"]),
+        # What the model was actually shown, which is what the track studied.
+        "n_approved": len(approved),
+        "n_investigational": len(investigational),
     }
 
 
 # ── the run ──────────────────────────────────────────────────────────────────
 
-async def _load_pocket(drug_id: str, targets: list[dict[str, Any]],
-                       drug_smiles: str) -> tuple[pocket_mod.Pocket | None, str | None]:
+async def _load_pocket(
+    drug_id: str, targets: list[dict[str, Any]], drug_smiles: str
+) -> tuple[pocket_mod.Pocket | None, str | None, dict[str, Any] | None]:
     """The crystal structure of this drug inside one of its targets, if one exists.
+
+    Returns the pocket, the reason there is none, and the target it was found in,
+    so the viewer can mark which protein actually carries a measured pose.
 
     Only a BOUND plan carries a measured position. A predicted protein tells us
     the shape of the protein but nothing about where the drug goes, so there is
@@ -359,19 +423,40 @@ async def _load_pocket(drug_id: str, targets: list[dict[str, Any]],
             continue
         try:
             raw, _ = await fetch_structure_file("rcsb", plan.protein.id)
-            return await asyncio.to_thread(
+            found = await asyncio.to_thread(
                 pocket_mod.read_pocket, raw.decode("utf-8", "replace"), plan.ligand_comp_id,
-                drug_smiles, plan.protein.id, plan.resolution_A), None
+                drug_smiles, plan.protein.id, plan.resolution_A)
+            return found, None, target
         except Exception as exc:
             log.info("could not read pocket %s: %s", plan.protein.id, exc)
             tried.append(f"{plan.protein.id} could not be read")
     note = ("No experimental structure of this drug inside a target protein"
             + (f" ({'; '.join(tried)})" if tried else "")
             + ", so nothing here tests whether a molecule fits the target.")
-    return None, note
+    return None, note, None
 
 
-async def _propose(job: dict[str, Any], prompt: str) -> dict[str, Any]:
+def pocket_lines(pocket: pocket_mod.Pocket | None, note: str | None,
+                 parent_name: str) -> tuple[str, str]:
+    """What to tell the reader about the pocket, and what to tell the model.
+
+    Both the per-drug run and every track of a disease run say this, and the
+    wording matters: it is where the product admits that a placement is not a
+    docking. One copy, so the two cannot drift apart.
+    """
+    if pocket is None:
+        return note or "", ""
+    shown = (f"Found {parent_name} inside its target in {pocket.pdb_id}"
+             + (f" at {pocket.resolution_A} A" if pocket.resolution_A else "")
+             + ". Every molecule will be placed there to see whether it fits.")
+    told = (f"\n\nA crystal structure ({pocket.pdb_id}) records exactly where {parent_name} sits "
+            "inside its target. Every molecule you propose will be laid onto that position by its "
+            "shared core, and any atom that ends up inside the protein counts against it. Keep "
+            "the core that binds, and grow into open space rather than into the protein.")
+    return shown, told
+
+
+async def _propose(job: dict[str, Any], prompt: str, track: str | None = None) -> dict[str, Any]:
     """One model call, streamed so the page has something to show while it thinks."""
     from google import genai
     from google.genai import types
@@ -400,7 +485,7 @@ async def _propose(job: dict[str, Any], prompt: str) -> dict[str, Any]:
         partial = _partial_reasoning(raw)
         if partial and len(partial) - shown >= 40:
             shown = len(partial)
-            _emit(job, "thinking", text=partial)
+            _emit(job, "thinking", track=track, text=partial)
 
     raw = raw.strip()
     if not raw:
@@ -455,106 +540,15 @@ async def _run(job_id: str) -> None:
               parent=job["parent"],
               targets=[t["symbol"] for t in context["targets"]])
 
-        pocket, pocket_note = await _load_pocket(
+        pocket, pocket_note, _ = await _load_pocket(
             job["drug_id"], context["targets"], context["parent_smiles"])
         job["pocket"] = ({"pdb_id": pocket.pdb_id, "resolution_A": pocket.resolution_A}
                          if pocket else None)
-        _emit(job, "pocket", text=(
-            f"Found {context['parent_name']} inside its target in {pocket.pdb_id}"
-            + (f" at {pocket.resolution_A} A" if pocket.resolution_A else "")
-            + ". Every molecule will be placed there to see whether it fits."
-        ) if pocket else pocket_note)
-        if pocket:
-            context["text"] += (
-                f"\n\nA crystal structure ({pocket.pdb_id}) records exactly where "
-                f"{context['parent_name']} sits inside its target. Every molecule you propose will "
-                "be laid onto that position by its shared core, and any atom that ends up inside "
-                "the protein counts against it. Keep the core that binds, and grow into open space "
-                "rather than into the protein.")
+        shown, told = pocket_lines(pocket, pocket_note, context["parent_name"])
+        _emit(job, "pocket", text=shown)
+        context["text"] += told
 
-        history: list[str] = []
-        seen: set[str] = set()
-
-        for round_no in range(1, ROUNDS + 1):
-            _emit(job, "round", n=round_no, of=ROUNDS)
-
-            prompt = context["text"]
-            if history:
-                prompt += ("\n\nWHAT YOU ALREADY TRIED, and what the chemistry engine said.\n"
-                           "Do not repeat any of these structures. Fix what it objected to:\n"
-                           + "\n".join(history))
-                prompt += (f"\n\nRound {round_no} of {ROUNDS}. Propose {PER_ROUND} improved molecules.")
-            else:
-                prompt += (f"\n\nRound 1 of {ROUNDS}. Study the drugs above, then propose "
-                           f"{PER_ROUND} molecules designed from {context['parent_name']}.")
-
-            try:
-                parsed = await _propose(job, prompt)
-            except Exception as exc:  # one bad round should not end the run
-                log.warning("design round %d failed: %s", round_no, exc)
-                _emit(job, "note", text=f"Round {round_no} did not return usable molecules. Moving on.")
-                history.append(f"- round {round_no} produced nothing usable")
-                continue
-
-            _emit(job, "reasoning", round=round_no, text=parsed.get("reasoning", ""))
-
-            for proposal in parsed.get("molecules", [])[:PER_ROUND]:
-                smiles = (proposal.get("smiles") or "").strip()
-                name = (proposal.get("name") or f"R{round_no}").strip()
-                if not smiles:
-                    continue
-                attempt_id = f"{round_no}-{len(job['attempts'])}"
-                _emit(job, "molecule", id=attempt_id, round=round_no, name=name, smiles=smiles,
-                      rationale=proposal.get("rationale", ""), builds_on=proposal.get("builds_on", ""))
-
-                if smiles in seen:
-                    check = {"smiles": smiles, "valid": True, "status": "fail",
-                             "summary": "Already proposed in an earlier round.",
-                             "checks": [{"id": "repeat", "label": "A new attempt", "status": "fail",
-                                         "value": "repeat", "detail": "This exact structure was "
-                                                                      "already tried this run."}],
-                             "properties": {}}
-                else:
-                    seen.add(smiles)
-                    check = await asyncio.to_thread(
-                        chemcheck.evaluate, smiles, context["parent_smiles"], context["parent_name"])
-                    if check["valid"]:
-                        fit, note = None, None
-                        if pocket:
-                            try:
-                                fit = await asyncio.to_thread(pocket_mod.place, smiles, pocket)
-                            except Exception as exc:
-                                note = str(exc)
-                        else:
-                            note = pocket_note
-                        check["checks"].append(pocket_mod.as_check(fit, note))
-                        if fit:
-                            check["properties"]["pocket"] = {
-                                k: fit[k] for k in
-                                ("pdb_id", "clashes", "atoms", "rmsd", "core_atoms", "closest_A")}
-                            check["pose_sdf"] = fit["sdf"]
-                        # the worst check still decides, now that fit is one of them
-                        statuses = [c["status"] for c in check["checks"]]
-                        check["status"] = ("fail" if "fail" in statuses
-                                           else "warn" if "warn" in statuses else "pass")
-                        failed = [c["problem"] for c in check["checks"] if c["status"] == "fail"]
-                        warned = [c["problem"] for c in check["checks"] if c["status"] == "warn"]
-                        check["summary"] = ("Passes every check." if check["status"] == "pass"
-                                            else "Rejected: " + "; ".join(failed) + "." if failed
-                                            else "Usable, but " + "; ".join(warned) + ".")
-
-                attempt = {"id": attempt_id, "round": round_no, "name": name,
-                           "rationale": proposal.get("rationale", ""),
-                           "builds_on": proposal.get("builds_on", ""), "check": check}
-                job["attempts"].append(attempt)
-                _emit(job, "verdict", id=attempt_id, status=check["status"],
-                      summary=check["summary"], check=check)
-                history.append(chemcheck.feedback_line(name, check))
-
-            passed = [a for a in job["attempts"] if a["check"]["status"] == "pass"]
-            if passed and round_no < ROUNDS:
-                _emit(job, "note", text=f"{len(passed)} molecule(s) pass every check so far. "
-                                        "Refining to see if they can be improved.")
+        await run_rounds(job, context, pocket, pocket_note, attempts=job["attempts"])
 
         ranked = sorted(job["attempts"], key=_rank_key)
         job["best"] = ranked[0] if ranked else None
@@ -572,3 +566,116 @@ async def _run(job_id: str) -> None:
         job["status"] = "error"
         job["error"] = str(exc)
         _emit(job, "error", text=str(exc))
+
+
+async def run_rounds(job: dict[str, Any], context: dict[str, Any],
+                     pocket: pocket_mod.Pocket | None, pocket_note: str | None, *,
+                     attempts: list[dict[str, Any]], track: str | None = None,
+                     id_prefix: str = "") -> list[dict[str, Any]]:
+    """The design loop itself: propose, judge with RDKit, feed the failures back in.
+
+    Shared by the per-drug run and by each track of a disease run, so the three
+    rules in the module docstring are enforced in one place rather than three.
+    Every attempt is appended to `attempts`, rejected ones included.
+    """
+    history: list[str] = []
+    seen: set[str] = set()
+
+    for round_no in range(1, ROUNDS + 1):
+        _emit(job, "round", track=track, n=round_no, of=ROUNDS)
+
+        prompt = context["text"]
+        if history:
+            prompt += ("\n\nWHAT YOU ALREADY TRIED, and what the chemistry engine said.\n"
+                       "Do not repeat any of these structures. Fix what it objected to:\n"
+                       + "\n".join(history))
+            prompt += (f"\n\nRound {round_no} of {ROUNDS}. Propose {PER_ROUND} improved molecules.")
+        else:
+            prompt += (f"\n\nRound 1 of {ROUNDS}. Study the drugs above, then propose "
+                       f"{PER_ROUND} molecules designed from {context['parent_name']}.")
+
+        try:
+            parsed = await _propose(job, prompt, track=track)
+        except Exception as exc:  # one bad round should not end the run
+            log.warning("design round %d failed: %s", round_no, exc)
+            _emit(job, "note", track=track,
+                  text=f"Round {round_no} did not return usable molecules. Moving on.")
+            history.append(f"- round {round_no} produced nothing usable")
+            continue
+
+        _emit(job, "reasoning", track=track, round=round_no, text=parsed.get("reasoning", ""))
+
+        for proposal in parsed.get("molecules", [])[:PER_ROUND]:
+            smiles = (proposal.get("smiles") or "").strip()
+            name = (proposal.get("name") or f"R{round_no}").strip()
+            if not smiles:
+                continue
+            attempt_id = f"{id_prefix}{round_no}-{len(attempts)}"
+            _emit(job, "molecule", track=track, id=attempt_id, round=round_no, name=name,
+                  smiles=smiles, rationale=proposal.get("rationale", ""),
+                  builds_on=proposal.get("builds_on", ""))
+
+            if smiles in seen:
+                # `problem` is not optional: chemcheck.feedback_line reads it from
+                # every check that did not pass, to write the line the next round
+                # reads. Without it this raised KeyError on the one thing the
+                # branch exists to handle gracefully -- the model repeating itself,
+                # which rule 4 of the prompt asks it not to do and it does anyway
+                # -- and the exception escaped the round and killed the whole track.
+                check = {"smiles": smiles, "valid": True, "status": "fail",
+                         "summary": "Already proposed in an earlier round.",
+                         "checks": [{"id": "repeat", "label": "A new attempt", "status": "fail",
+                                     "value": "repeat",
+                                     "problem": "repeats a structure already tried",
+                                     "detail": "This exact structure was "
+                                               "already tried this run."}],
+                         "properties": {}}
+            else:
+                seen.add(smiles)
+                check = await asyncio.to_thread(
+                    chemcheck.evaluate, smiles, context["parent_smiles"], context["parent_name"])
+                if check["valid"]:
+                    # Only judged against the pocket when there is a pocket. With no
+                    # measured position there is nothing to place anything into, and
+                    # recording that as a warning against each molecule said "could
+                    # not be placed" about a placement that was never attempted --
+                    # which also made every molecule warn, so a run on a drug with no
+                    # co-crystal accepted none of its 36 attempts while the page
+                    # explained that 81.5% of random molecules pass. The absence is
+                    # said once per track in the `pocket` event and again in the case
+                    # against; it is not a fact about any one molecule.
+                    if pocket:
+                        fit, note = None, None
+                        try:
+                            fit = await asyncio.to_thread(pocket_mod.place, smiles, pocket)
+                        except Exception as exc:
+                            note = str(exc)
+                        check["checks"].append(pocket_mod.as_check(fit, note))
+                        if fit:
+                            check["properties"]["pocket"] = {
+                                k: fit[k] for k in
+                                ("pdb_id", "clashes", "atoms", "rmsd", "core_atoms", "closest_A")}
+                            check["pose_sdf"] = fit["sdf"]
+                    # The worst check still decides, now that fit may be one of
+                    # them, and the sentence comes from the same place as before
+                    # it was one. Rewriting it here is what let the two copies
+                    # drift into claiming a target test that never happened.
+                    check["status"], check["summary"] = chemcheck.summarise(check["checks"])
+
+            attempt = {"id": attempt_id, "round": round_no, "name": name,
+                       "rationale": proposal.get("rationale", ""),
+                       "builds_on": proposal.get("builds_on", ""), "check": check}
+            if track:
+                attempt["track"] = track
+            attempts.append(attempt)
+            _emit(job, "verdict", track=track, id=attempt_id, status=check["status"],
+                  summary=check["summary"], check=check)
+            history.append(chemcheck.feedback_line(name, check))
+
+        passed = [a for a in attempts if a["check"]["status"] == "pass"]
+        if passed and round_no < ROUNDS:
+            _emit(job, "note", track=track,
+                  text=f"{len(passed)} molecule(s) pass every check so far. "
+                       "Refining to see if they can be improved.")
+
+    return attempts

@@ -8,7 +8,7 @@ import { getEval } from "@/lib/api";
 import type { EvalMetrics } from "@/lib/types";
 
 const METHOD_LABEL: Record<string, string> = {
-  repurposekg: "RepurposeKG (shipped)",
+  repurposekg: "Scaffold (shipped)",
   graph_plus_chem: "Graph paths + chemical",
   graph_only: "Graph paths only",
   graph_plus_homolog: "Graph paths + homology",
@@ -62,6 +62,11 @@ export default function Validation() {
                 {hidden ? ` (${hidden.toLocaleString()} drug–disease pairs)` : ""} and asked the system to rank them back.
                 Weights were tuned on one split{e.tuning ? ` (seed ${e.tuning.split_seed})` : ""} and reported on another
                 {e.report_split_seed != null ? ` (seed ${e.report_split_seed})` : ""}, so the numbers are not graded on themselves.
+              </p>
+              <p className="mx-auto mt-4 max-w-[640px] text-center text-[15px] leading-relaxed text-muted">
+                This measures the ranking a design starts from, which is the part that can be checked against things
+                already known. The designed molecules themselves cannot be tested this way: they have never been made,
+                so there is no answer to score them against.
               </p>
 
               {ours && (

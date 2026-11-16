@@ -3,13 +3,14 @@ import DiseaseSearch from "@/components/DiseaseSearch";
 import Footer from "@/components/Footer";
 import { DEMO_DISEASES } from "@/lib/config";
 
-export default function FindDrugs() {
+export default function DesignForADisease() {
   return (
     <div className="flex min-h-[calc(100dvh-64px)] flex-col">
       <section className="mx-auto flex w-full max-w-[760px] flex-1 flex-col items-center px-4 pt-20 text-center sm:px-8 sm:pt-32">
         <h1 className="text-[clamp(42px,6.5vw,76px)] font-extrabold leading-[0.95] tracking-[-0.05em]">Which disease?</h1>
-        <p className="mt-5 max-w-[520px] text-[17px] leading-relaxed text-muted">
-          Type a name or a synonym. Diseases with only a few known genes are flagged, because their rankings are weaker.
+        <p className="mt-5 max-w-[540px] text-[17px] leading-relaxed text-muted">
+          Type a name or a synonym, and three molecules start being designed for it. Diseases with only a few known genes
+          are flagged, because the drugs the design builds on are ranked more weakly.
         </p>
         <div className="mt-10 w-full">
           <DiseaseSearch autoFocus />

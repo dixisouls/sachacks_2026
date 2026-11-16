@@ -112,7 +112,8 @@ export default function DiseaseSearch({
             disabled={!data.length}
             className="h-12 shrink-0 rounded-full bg-accent px-6 text-[15px] font-semibold text-surface transition-colors hover:bg-accent-ink disabled:bg-faint/60 max-sm:px-4"
           >
-            Find drugs
+            <span className="max-sm:hidden">Design molecules</span>
+            <span className="sm:hidden">Design</span>
           </button>
         )}
       </div>

@@ -3,6 +3,7 @@
 // Without it (or with NEXT_PUBLIC_USE_MOCKS=true) the app runs on the offline snapshot in ./mock.
 
 import * as mock from "./mock";
+import type { Job, JobStart } from "./run";
 import type {
   Brief,
   Comparison,
@@ -119,6 +120,30 @@ export function getDesign(jobId: string): Promise<DesignJob> {
 
 /** Where the live event stream lives. Empty when there is no backend to stream from. */
 export function designStreamUrl(jobId: string, since: number): string {
+  if (!BASE) return "";
+  return `${BASE}/api/design/${encodeURIComponent(jobId)}/stream?since=${since}`;
+}
+
+/**
+ * Start the three-track run for a disease (DESIGN_API.md).
+ *
+ * Without `force` this never starts a second run for a disease that already
+ * has one: an in-flight run returns its own job_id, and a finished one returns
+ * a stable id from the disk cache. That is what makes a reload reattach
+ * instead of restarting, so the page may call it on every mount.
+ */
+export function startRun(diseaseId: string, force = false): Promise<JobStart> {
+  const q = new URLSearchParams({ disease_id: diseaseId, force: String(force) });
+  return request<JobStart>(`/api/design/disease?${q}`, { method: "POST" });
+}
+
+/** The whole run, for the first paint and for every reconnect. */
+export function getRun(jobId: string): Promise<Job> {
+  return request<Job>(`/api/design/${encodeURIComponent(jobId)}`);
+}
+
+/** `since` is inclusive: the stream sends every event with `i >= since`. */
+export function runStreamUrl(jobId: string, since: number): string {
   if (!BASE) return "";
   return `${BASE}/api/design/${encodeURIComponent(jobId)}/stream?since=${since}`;
 }

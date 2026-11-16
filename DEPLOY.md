@@ -77,9 +77,21 @@ and it restarts at least daily. `cache/` goes with it, so structure lookups and
 finished design runs are fetched again from PubChem, RCSB, AlphaFold and Gemini
 after a restart. Nothing breaks; the first view of each is just slow again.
 
-**Design jobs live in memory.** A restart loses a run in progress, and the job
-id stops resolving. Stay on one web dyno: with two, the browser can ask a dyno
-that has never heard of the job. `heroku ps:scale web=1`.
+**One worker, one dyno.** The `Procfile` pins `--workers 1`, and it has to stay
+that way. Each worker loads its own copy of the artifacts, and design jobs live
+in that worker's memory, so a second one both doubles the memory and gives the
+browser a chance to ask a process that has never heard of its job. The Python
+buildpack sets `WEB_CONCURRENCY` from the available memory and will start two
+workers if nothing overrides it, which is what crashed the first deploy. The
+same applies to dynos: `heroku ps:scale web=1`.
+
+**Design jobs live in memory.** A restart loses a run in progress and the job
+id stops resolving.
+
+**Memory.** The backend settles around 300 MB, rising to roughly 350 MB once a
+design run has built its fingerprints, against 512 MB on Eco and Basic dynos.
+That is comfortable but not roomy; `heroku logs` will show `Error R14` if it
+starts swapping and `R15` if it is killed.
 
 **Long requests.** Heroku closes a connection that has sent nothing for 55
 seconds. The design stream sends a heartbeat every 15 seconds to stay under

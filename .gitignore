@@ -138,3 +138,8 @@ $RECYCLE.BIN/
 
 # Local scratch scripts
 /test.py
+
+# Recorded design runs from scripts/design_disease_live.py --fixture. A real run
+# is half a megabyte of generated JSON and can be made again on demand, so it is
+# a debugging artifact rather than source.
+/api/fixtures/

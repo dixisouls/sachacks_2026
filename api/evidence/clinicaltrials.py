@@ -46,7 +46,7 @@ def fetch_trials(drug_name: str, disease_name: str):
     key = f"{drug_name.lower()}|{disease_name.lower()}"
 
     async def run(client: httpx.AsyncClient) -> dict:
-        cached = cache.load(SOURCE, key)
+        cached = cache.get(SOURCE, key)
         if cached is not None:
             return cached
 

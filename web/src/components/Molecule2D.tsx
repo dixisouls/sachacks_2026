@@ -7,6 +7,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
+// The drawer leaves the svg with a fitted viewBox and no intrinsic size, so
+// the drawing scales to whatever box it is given and keeps its proportions.
+// Size it with `className`; there is nothing to configure here.
 export default function Molecule2D({ smiles, className }: { smiles: string; className?: string }) {
   const ref = useRef<SVGSVGElement>(null);
   const [failed, setFailed] = useState(false);
@@ -18,7 +21,7 @@ export default function Molecule2D({ smiles, className }: { smiles: string; clas
     if (!smiles || !el) return;
     import("smiles-drawer").then(({ default: SmilesDrawer }) => {
       if (cancelled || !el) return;
-      const drawer = new SmilesDrawer.SvgDrawer({ width: 320, height: 240 });
+      const drawer = new SmilesDrawer.SvgDrawer({ width: 500, height: 500 });
       SmilesDrawer.parse(
         smiles,
         (tree: unknown) => !cancelled && drawer.draw(tree, el, "light"),

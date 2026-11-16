@@ -62,7 +62,7 @@ export default function LiveDemo() {
       <div className="mt-2 flex items-center justify-between gap-3 bg-soft-2 px-6 py-3.5">
         <p className="text-[13px] text-muted">Top 5 of {q.data?.approved.length ?? 50}. Click a drug to see why.</p>
         <Link href={`/d/${id}`} className="inline-flex h-9 shrink-0 items-center rounded-full bg-accent px-4 text-[13px] font-semibold text-white hover:bg-accent-ink">
-          See all
+          Design for this disease
         </Link>
       </div>
     </div>

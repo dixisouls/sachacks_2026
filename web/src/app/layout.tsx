@@ -8,8 +8,9 @@ const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"] });
 const mono = JetBrains_Mono({ variable: "--font-jetbrains", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "RepurposeKG",
-  description: "Name a disease. Get approved drugs that might treat it, each with the biological path behind it.",
+  title: "Scaffold",
+  description:
+    "Name a disease. An AI designs three new molecules for it, live, and shows every attempt it threw out along the way.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

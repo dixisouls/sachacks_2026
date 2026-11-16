@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-15T11:01:50",
+  "generated_at": "2026-11-15T16:46:09",
   "holdout_fraction": 0.2,
   "positive_set": {
     "pairs": 8217,
@@ -88,13 +88,13 @@
     },
     "graph_plus_homolog": {
       "scored_pairs": 1002,
-      "unreachable": 263,
-      "hits@10": 0.1836,
-      "hits@10_se": 0.0122,
-      "hits@50": 0.3433,
-      "hits@100": 0.4371,
-      "mrr": 0.0914,
-      "median_rank": 61
+      "unreachable": 257,
+      "hits@10": 0.1737,
+      "hits@10_se": 0.012,
+      "hits@50": 0.3383,
+      "hits@100": 0.4361,
+      "mrr": 0.0893,
+      "median_rank": 64
     },
     "popularity": {
       "scored_pairs": 1002,
@@ -119,5 +119,5 @@
   },
   "not_recoverable": 616,
   "diseases": 576,
-  "seconds": 7.0
+  "seconds": 7.1
 }

@@ -147,7 +147,8 @@ def read_fasta(path: Path) -> dict[str, str]:
 
 
 def build_homology(genes: pl.DataFrame, T: sp.csr_matrix, M: sp.csr_matrix,
-                   min_identity: float, max_evalue: float, top_k: int):
+                   min_identity: float, max_evalue: float, top_k: int,
+                   min_coverage: float = 0.6):
     mmseqs = shutil.which("mmseqs")
     if not mmseqs:
         log("  mmseqs not found on PATH, skipping the sequence layer.")
@@ -185,7 +186,7 @@ def build_homology(genes: pl.DataFrame, T: sp.csr_matrix, M: sp.csr_matrix,
                     fh.write(f">{a}\n{seqs[a]}\n")
         cmd = [mmseqs, "easy-search", str(qf), str(tf), str(out), str(td / "tmp"),
                "--min-seq-id", str(min_identity), "-e", str(max_evalue),
-               "-c", "0.6", "--cov-mode", "0", "-s", "5.7", "--threads", "4",
+               "-c", str(min_coverage), "--cov-mode", "0", "-s", "5.7", "--threads", "4",
                "--format-output", "query,target,fident,evalue,bits,qcov,tcov"]
         log("  running mmseqs easy-search...")
         proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -225,8 +226,24 @@ def main() -> None:
     ap.add_argument("--min-tanimoto", type=float, default=0.55,
                     help="chemical similarity cutoff (0.55 is a common look-alike threshold)")
     ap.add_argument("--chem-top-k", type=int, default=15)
-    ap.add_argument("--min-identity", type=float, default=0.4,
-                    help="sequence identity cutoff, 0.4 = 40 percent")
+    # 0.30 is a floor, not a default to tune downward. Below roughly 30% identity
+    # sequence similarity stops implying shared function: it starts returning
+    # pairs that share only a fold, and every kinase is about 30% identical to
+    # every other kinase. Those pairs are not off-target leads, they are noise
+    # with a number attached, and api/workup.py shows them to a reader as
+    # proteins the molecule might also hit. Do not go below 0.30.
+    #
+    # Why not 0.40, which this ran with first: it left GABBR2, the target of the
+    # Rett demo's seed drug, with no relatives at all, because GABBR1 -- the
+    # other half of the same receptor -- is only 35% identical to it. A cutoff
+    # that hides the one protein a reader would ask about is too tight. 0.35
+    # would also catch it, but at 0.350 measured it sits exactly on the line,
+    # and a prefilter is approximate enough that a rebuild could drop it.
+    ap.add_argument("--min-identity", type=float, default=0.3,
+                    help="sequence identity cutoff, 0.3 = 30 percent. Do not go lower: "
+                         "see the note above this argument")
+    ap.add_argument("--min-coverage", type=float, default=0.6,
+                    help="how much of the query the alignment must cover")
     ap.add_argument("--max-evalue", type=float, default=1e-10)
     ap.add_argument("--seq-top-k", type=int, default=10)
     args = ap.parse_args()
@@ -250,11 +267,16 @@ def main() -> None:
 
     if args.only != "chem":
         log("protein sequence similarity")
-        S, pairs = build_homology(genes, T, M, args.min_identity, args.max_evalue, args.seq_top_k)
+        S, pairs = build_homology(genes, T, M, args.min_identity, args.max_evalue,
+                                  args.seq_top_k, args.min_coverage)
         if S is not None:
             sp.save_npz(ART / "S.npz", S)
             pairs.write_parquet(ART / "homolog_pairs.parquet")
+            # api/workup.py reads min_identity and min_coverage back out of here to
+            # tell a reader what the off-target list was filtered on, so these are
+            # part of the product, not a build log.
             meta["homology"] = {"nnz": int(S.nnz), "min_identity": args.min_identity,
+                                "min_coverage": args.min_coverage,
                                 "max_evalue": args.max_evalue, "top_k": args.seq_top_k,
                                 "targets_with_a_homolog": int((np.diff(S.indptr) > 0).sum())}
             log(f"  S.npz: {S.nnz} pairs, {meta['homology']['targets_with_a_homolog']} "

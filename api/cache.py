@@ -33,6 +33,16 @@ def _path(source: str, key: str) -> Path:
 
 
 def get(source: str, key: str) -> Any | None:
+    """The cached value, or None if nothing is cached under this key.
+
+    The same key returns the same thing whether or not this process has already
+    read it. That is worth stating because it was not true: the envelope written
+    to disk was handed back unopened on a cold read and put into memory as well,
+    so a caller saw the value or the envelope depending only on which call came
+    first. The envelope is an on-disk detail -- it carries the un-hashed key
+    beside the hashed filename, so a cache directory can be read by a human --
+    and it is opened here, once, where it is written.
+    """
     slot = f"{source}:{key}"
     with _lock:
         if slot in _memory:
@@ -41,13 +51,24 @@ def get(source: str, key: str) -> Any | None:
     if not path.exists():
         return None
     try:
-        value = json.loads(path.read_text())
+        payload = json.loads(path.read_text())
     except (json.JSONDecodeError, OSError) as exc:
         log.warning("cache read failed for %s, ignoring: %s", path.name, exc)
         return None
+    value = payload["value"] if _is_envelope(payload, key) else payload
     with _lock:
         _memory[slot] = value
     return value
+
+
+def _is_envelope(payload: Any, key: str) -> bool:
+    """Whether this is a file put() wrote, rather than a value that looks like one.
+
+    A cached value may itself be a dict with a `value` field, so the shape alone
+    is not enough: the envelope is recognised by carrying back the exact key it
+    was asked for.
+    """
+    return isinstance(payload, dict) and payload.get("key") == key and "value" in payload
 
 
 def put(source: str, key: str, value: Any) -> None:
@@ -61,14 +82,6 @@ def put(source: str, key: str, value: Any) -> None:
         tmp.replace(path)
     except OSError as exc:  # a read-only disk must not break a request
         log.warning("cache write failed for %s: %s", path.name, exc)
-
-
-def load(source: str, key: str) -> Any | None:
-    """get(), unwrapping the stored envelope."""
-    raw = get(source, key)
-    if raw is None:
-        return None
-    return raw.get("value") if isinstance(raw, dict) and "value" in raw else raw
 
 
 def stats() -> dict:

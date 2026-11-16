@@ -188,13 +188,25 @@ def place(smiles: str, pocket: Pocket) -> dict[str, Any]:
 
 
 def as_check(result: dict[str, Any] | None, error: str | None = None) -> dict[str, Any]:
-    """The placement, in the same shape as every other check in chemcheck."""
+    """The placement, in the same shape as every other check in chemcheck.
+
+    Only asked when a measured position exists, so `result is None` means this
+    molecule could not be put into a pocket that is there -- almost always
+    because it kept too little of the drug's core to pin. That is a fact about
+    the molecule and is reported as a doubt about it.
+
+    It must not be used to report that there is no pocket at all. That is not a
+    fact about any molecule, and recording it here once said "could not be
+    placed" about a placement nobody attempted, against every molecule in the
+    run. The caller says that once per run instead.
+    """
     if result is None:
         return {"id": "pocket", "label": "Fits where the drug sits", "status": "warn",
-                "value": "not tested", "problem": "could not be placed in the pocket",
-                "detail": error or "No experimental structure of the original drug inside its "
-                                   "protein, so there is no measured position to place this one "
-                                   "into. Nothing here tests the target."}
+                "value": "not placed", "problem": "could not be laid onto the drug's position",
+                "detail": ((error or "The placement did not run.") + " So this molecule was not "
+                           "judged against the target: too little of the drug's core survived to "
+                           "pin it to the measured position, which is itself a reason to doubt "
+                           "it binds the same way.")}
     clashes, atoms = result["clashes"], result["atoms"]
     share = clashes / max(atoms, 1)
     status = "pass" if clashes == 0 else "warn" if share <= 0.15 else "fail"
