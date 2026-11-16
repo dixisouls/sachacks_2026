@@ -365,6 +365,14 @@ async def _admet(track: dict[str, Any], context: dict[str, Any]) -> dict[str, An
 
 # ── 3. off-target ────────────────────────────────────────────────────────────
 
+# What the sequence layer can and cannot see, said once and quoted wherever the
+# section is thin. Both numbers are the defaults scripts/build_similarity.py ran
+# with, and the asymmetry is the shape of the search it ran.
+LIMITS = ("The comparison behind it keeps pairs above 40% identity over 60% of the "
+          "sequence, and it searched drug-target proteins against proteins already "
+          "associated with a disease, so a protein outside both sets cannot appear.")
+
+
 @lru_cache(maxsize=1)
 def _homolog_pairs() -> pl.DataFrame:
     path = ARTIFACTS / "homolog_pairs.parquet"
@@ -389,33 +397,55 @@ def _name_of() -> dict[str, str | None]:
 def homologs(gene_ids: list[str], limit: int = 6) -> list[dict[str, Any]]:
     """Proteins whose sequence resembles one of these genes' proteins.
 
-    Read straight out of the all-against-all sequence comparison in
-    artifacts/homolog_pairs.parquet, the same data the ranking's homolog layer
-    uses. The identity is measured; what it implies is not.
+    Read straight out of the sequence comparison in homolog_pairs.parquet, the
+    same data the ranking's homolog layer rests on. The identity is measured;
+    what it implies is not.
+
+    Both columns are searched, not just the first. That file was built one way
+    round -- drug-target proteins searched against disease-associated proteins
+    -- so a protein can appear only as somebody else's homolog. Sequence
+    identity is symmetric, so a pair found from either side says the same thing,
+    and looking only at the query column throws away half the data.
+
+    Two limits worth knowing, both reported by the caller rather than papered
+    over: the file holds pairs above 40% identity with 60% coverage, and its
+    far side is only proteins associated with some disease. So an empty result
+    means nothing close enough was recorded, not that the protein is selective.
     """
-    wanted = [g for g in gene_ids if g]
+    wanted = {g for g in gene_ids if g}
     if not wanted:
         return []
     pairs = _homolog_pairs()
-    hits = (pairs.filter(pl.col("gene_id").is_in(wanted))
-                 .filter(~pl.col("homolog_gene_id").is_in(wanted))  # a target is not an off-target
-                 .sort("identity", descending=True))
+    forward = (pairs.filter(pl.col("gene_id").is_in(wanted))
+                    .select(other="homolog_gene_id", other_symbol="homolog_symbol",
+                            of_gene="gene_id", of_target="symbol",
+                            identity="identity", query_coverage="query_coverage"))
+    reverse = (pairs.filter(pl.col("homolog_gene_id").is_in(wanted))
+                    .select(other="gene_id", other_symbol="symbol",
+                            of_gene="homolog_gene_id", of_target="homolog_symbol",
+                            identity="identity", query_coverage="query_coverage"))
+    hits = (pl.concat([forward, reverse])
+              # one of the seed's own targets is not an off-target of itself
+              .filter(~pl.col("other").is_in(wanted))
+              .sort("identity", descending=True))
+
     uniprot, names = _uniprot_of(), _name_of()
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
     for row in hits.iter_rows(named=True):
-        gid = row["homolog_gene_id"]
+        gid = row["other"]
         if gid in seen:
             continue
         seen.add(gid)
         out.append({
             "gene_id": gid,
-            "symbol": row["homolog_symbol"] or gid,
+            "symbol": row["other_symbol"] or gid,
             "uniprot_id": uniprot.get(gid),
             "identity": round(float(row["identity"]), 3),
-            "of_target": row["symbol"],
+            "of_target": row["of_target"],
             "full_name": names.get(gid),
-            "coverage": round(float(row["query_coverage"]), 3) if row["query_coverage"] else None,
+            "coverage": (round(float(row["query_coverage"]), 3)
+                         if row["query_coverage"] else None),
         })
         if len(out) >= limit:
             break
@@ -450,9 +480,15 @@ async def _offtarget(track: dict[str, Any], context: dict[str, Any]) -> dict[str
     targets = context.get("targets") or []
     found = homologs([t.get("gene_id") for t in targets])
     if not found:
-        symbols = ", ".join(t["symbol"] for t in targets) or "the seed's targets"
-        raise RuntimeError(f"No protein in the sequence data resembles {symbols} closely "
-                           "enough to be recorded, so there is no off-target list to show")
+        # An empty list is a result, not a failure, and it is worth showing: it
+        # says where the data stops. Returned without asking the model anything,
+        # because there is nothing for it to explain and it would fill the gap.
+        symbols = ", ".join(t["symbol"] for t in targets)
+        return {"items": [], "note": (
+            f"No protein in the sequence data resembles "
+            f"{symbols or 'the targets recorded for this drug'} closely enough to be listed. "
+            f"{LIMITS} So this is a gap in the data, not evidence that the molecule is "
+            "selective: no one has tested it against anything.")}
 
     lines = [f"- {h['symbol']}"
              + (f" ({h['full_name']})" if h["full_name"] else "")
@@ -483,7 +519,7 @@ async def _offtarget(track: dict[str, Any], context: dict[str, Any]) -> dict[str
     note = str(parsed.get("note", "")).strip()
     honest = ("Identities are measured sequence identity from artifacts/homolog_pairs.parquet. "
               "A similar sequence is a reason to check a protein, not evidence that this "
-              "molecule binds it: nothing here was tested against any of them.")
+              f"molecule binds it: nothing here was tested against any of them. {LIMITS}")
     return {"items": items, "note": f"{note} {honest}".strip() if note else honest}
 
 

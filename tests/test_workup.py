@@ -305,3 +305,48 @@ def test_a_section_that_fails_is_null_and_does_not_stop_the_rest(monkeypatch):
     failed = [e for e in job["events"] if e["type"] == "workup_step" and e["status"] == "error"]
     assert [e["step"] for e in failed] == ["synthesis"]
     assert "synthesis" not in [e["kind"] for e in job["events"] if e["type"] == "workup"]
+
+
+def test_no_homolog_in_the_data_is_an_empty_list_not_a_missing_section(monkeypatch):
+    """GABBR2, the target of the Rett demo's seed, has no recorded homolog.
+
+    An empty list says where the data stops, which is worth showing. A null
+    section would read as a bug, and asking the model to fill the gap is exactly
+    how an off-target list gets invented.
+    """
+    asked = []
+
+    async def fake_ask(prompt, schema):
+        asked.append(schema)
+        return {"items": [], "note": "n"}
+
+    monkeypatch.setattr(workup_mod, "_ask", fake_ask)
+    context = {**CONTEXT,
+               "targets": [{"symbol": "GABBR2", "uniprot": "O75899",
+                            "gene_id": "ENSG00000136928"}]}
+    assert homologs(["ENSG00000136928"]) == []
+
+    out = asyncio.run(workup_mod.run_workup(_job(), "approved", _track(), context))
+    assert out["offtarget"] == {"items": [], "note": out["offtarget"]["note"]}
+    assert out["offtarget"]["items"] == []
+    assert "GABBR2" in out["offtarget"]["note"]
+    assert "not evidence that the molecule is selective" in out["offtarget"]["note"]
+    assert "40% identity" in out["offtarget"]["note"]
+    # The model was never asked about it, so it cannot have supplied a protein.
+    assert not any("concern" in s["properties"].get("items", {})
+                   .get("items", {}).get("properties", {}) for s in asked)
+
+
+def test_the_homolog_lookup_searches_both_columns():
+    """The pair file was built one way round, so one-sided lookups lose half of it."""
+    import polars as pl
+
+    pairs = pl.read_parquet("artifacts/homolog_pairs.parquet")
+    query_side = set(pairs["gene_id"].to_list())
+    # A gene that only ever appears as somebody else's homolog.
+    only_reverse = [g for g in pairs["homolog_gene_id"].to_list() if g not in query_side]
+    assert only_reverse, "nothing to test: every homolog is also a query"
+    gene = only_reverse[0]
+    found = homologs([gene])
+    assert found, f"{gene} appears in the data but the lookup found nothing"
+    assert all(0.4 <= h["identity"] <= 1.0 for h in found)
