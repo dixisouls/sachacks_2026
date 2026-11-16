@@ -196,7 +196,7 @@ async def start(
 
     key = _job_key(drug_id, disease_id)
     if not force:
-        done = cache.load(SOURCE, key)
+        done = cache.get(SOURCE, key)
         if done:
             # stable id: the same finished run keeps its job id across restarts
             job_id = "c" + hashlib.sha256(key.encode()).hexdigest()[:11]

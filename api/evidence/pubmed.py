@@ -32,7 +32,7 @@ def fetch_pubmed(drug_name: str, disease_name: str):
     term = f'"{drug_name}"[tiab] AND "{disease_name}"[tiab]'
 
     async def run(client: httpx.AsyncClient) -> dict:
-        cached = cache.load(SOURCE, key)
+        cached = cache.get(SOURCE, key)
         if cached is not None:
             return cached
 

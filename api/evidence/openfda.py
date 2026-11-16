@@ -36,7 +36,7 @@ def fetch_adverse_events(drug_name: str, synonyms: list[str]):
         return response.json().get("results", [])
 
     async def run(client: httpx.AsyncClient) -> dict:
-        cached = cache.load(SOURCE, key)
+        cached = cache.get(SOURCE, key)
         if cached is not None:
             return cached
 

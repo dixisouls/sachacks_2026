@@ -88,7 +88,7 @@ def _best_synonym(synonyms: list[str] | None) -> str | None:
 
 
 async def pubchem_title(client: httpx.AsyncClient, inchi_key: str) -> str | None:
-    cached = cache.load(SOURCE, inchi_key)
+    cached = cache.get(SOURCE, inchi_key)
     if cached is not None:
         return cached or None
     try:

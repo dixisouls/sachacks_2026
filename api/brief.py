@@ -175,7 +175,7 @@ async def generate(scorer: Scorer, drug_id: str, disease_id: str,
 
     key = f"{drug_id}|{disease_id}|{config.GEMINI_MODEL}"
     if not refresh:
-        cached = cache.load(SOURCE, key)
+        cached = cache.get(SOURCE, key)
         if cached is not None:
             log.info("brief cache hit for %s", key)
             return Brief.model_validate(cached)

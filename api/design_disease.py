@@ -91,7 +91,7 @@ async def start_disease(
 
     key = _job_key(disease_id)
     if not force:
-        done = cache.load(SOURCE, key)
+        done = cache.get(SOURCE, key)
         if done:
             # Stable id: the same finished run keeps its job id across restarts, so a
             # page that reloads a week later re-attaches instead of designing again.
