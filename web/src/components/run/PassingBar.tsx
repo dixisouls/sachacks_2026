@@ -7,7 +7,18 @@
 import { Verdict } from "@/components/checks";
 import type { Seed } from "@/lib/run";
 
-export default function PassingBar({ seed, rate }: { seed: Seed | null; rate?: number }) {
+export default function PassingBar({
+  seed,
+  rate,
+  capped,
+}: {
+  seed: Seed | null;
+  rate?: number;
+  /** Set when no structure existed, so no molecule here could pass every
+   *  check — including the seed. Without this the column below would read the
+   *  seed's untested fit as a flaw a design could beat, which it cannot. */
+  capped?: string | null;
+}) {
   if (!seed && rate == null) return null;
   return (
     <section aria-labelledby="bar-h" className="rounded-[28px] bg-soft-2 p-4 sm:p-5">
@@ -23,9 +34,11 @@ export default function PassingBar({ seed, rate }: { seed: Seed | null; rate?: n
               <Verdict status={seed.check.status} />
             </dd>
             <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-              {seed.check.status === "pass"
-                ? `${seed.name} clears every check too, and it is already a medicine. A design that only matches it has improved on nothing.`
-                : `${seed.name} does not clear every check itself, so a design that does has at least beaten its own starting point on paper.`}
+              {capped
+                ? `Neither ${seed.name} nor anything designed from it could be tested for fit, so neither clears every check. That is a test missing, not a mark against either of them.`
+                : seed.check.status === "pass"
+                  ? `${seed.name} clears every check too, and it is already a medicine. A design that only matches it has improved on nothing.`
+                  : `${seed.name} does not clear every check itself, so a design that does has at least beaten its own starting point on paper.`}
             </p>
           </div>
         )}

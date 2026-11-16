@@ -37,6 +37,20 @@ export default function TrackPanel({
   const best = live.bestId ? live.molecules[live.bestId] : null;
   const seed = live.seed ?? track?.seed ?? null;
   const running = live.status === "running" || live.status === "waiting";
+  const pocket = live.pocket ?? track?.pocket ?? null;
+
+  // When no co-crystal exists for the seed, the fit check comes back untested
+  // on every molecule, and a molecule's verdict is its worst check — so the
+  // whole track tops out at "questions" and nothing can ever be accepted.
+  // A bare "0 of 36 accepted" reads as total failure when the truth is that
+  // the one test that would have mattered could not be run. Said once here,
+  // and passed to the two other places that would otherwise imply a verdict.
+  // Gated on the pocket event having landed (it always brings one or the
+  // other), because before it arrives a null pocket only means "not yet".
+  const capped = !pocket && (live.proteins.length > 0 || !!live.pocketNote);
+  const whyCapped = capped
+    ? `No measured structure exists for ${seed?.name ?? "the drug it started from"}, so the fit test could not be run on anything in this track. Nothing here can pass every check, however good it is.`
+    : null;
 
   // A track switch should not carry the previous track's selection over.
   useEffect(() => setPicked(null), [live.pool]);
@@ -56,12 +70,12 @@ export default function TrackPanel({
         <Stage
           molecule={shown}
           proteins={live.proteins.length ? live.proteins : (track?.proteins ?? [])}
-          pocket={live.pocket ?? track?.pocket ?? null}
+          pocket={pocket}
           pocketNote={live.pocketNote}
           seedName={seed?.name ?? ""}
           waiting={molecules.length === 0}
         />
-        <Narrative live={live} running={running} />
+        <Narrative live={live} running={running} capped={capped} />
       </div>
 
       {molecules.length > 0 && (
@@ -70,8 +84,17 @@ export default function TrackPanel({
             <h3 id={`tried-${live.pool}`} className="text-[18px] font-bold tracking-[-0.015em]">
               Every molecule it proposed
             </h3>
-            <p className="text-[13.5px] text-muted">
-              {live.accepted} of {live.tried} passed every check. Pick one to see it above.
+            <p className="max-w-[60ch] text-[13.5px] leading-relaxed text-muted">
+              {capped ? (
+                <>
+                  None of the {live.tried} could pass every check here, because the fit test cannot run without a
+                  measured structure. Pick one to see what it was judged on.
+                </>
+              ) : (
+                <>
+                  {live.accepted} of {live.tried} passed every check. Pick one to see it above.
+                </>
+              )}
             </p>
           </div>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -89,9 +112,9 @@ export default function TrackPanel({
         </section>
       )}
 
-      {best && <Winner molecule={best} />}
+      {best && <Winner molecule={best} capped={whyCapped} />}
 
-      <PassingBar seed={seed} rate={rate} />
+      <PassingBar seed={seed} rate={rate} capped={whyCapped} />
 
       <Workup workup={live.workup} steps={live.steps} moleculeName={best?.name ?? "it"} />
     </div>
@@ -141,7 +164,7 @@ function SeedStrip({ live, track }: { live: TrackState; track: Track | undefined
 }
 
 /** The run talking: the round it is on, what it is thinking, what it has said. */
-function Narrative({ live, running }: { live: TrackState; running: boolean }) {
+function Narrative({ live, running, capped }: { live: TrackState; running: boolean; capped: boolean }) {
   const scroller = useRef<HTMLOListElement>(null);
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
@@ -162,8 +185,18 @@ function Narrative({ live, running }: { live: TrackState; running: boolean }) {
                 ? "Getting started"
                 : "Finished"}
         </h3>
-        <span className="ml-auto text-[13px] tabular-nums text-muted" aria-live="polite">
-          {live.tried} proposed, {live.accepted} accepted
+        <span className="ml-auto text-[13px] text-muted" aria-live="polite">
+          {/* "0 accepted" would be the worst thing to show when nothing could be */}
+          {capped ? (
+            <>
+              <span className="tabular-nums">{live.tried}</span> proposed, none testable
+            </>
+          ) : (
+            <>
+              <span className="tabular-nums">{live.tried}</span> proposed,{" "}
+              <span className="tabular-nums">{live.accepted}</span> accepted
+            </>
+          )}
         </span>
       </div>
 
@@ -203,7 +236,7 @@ function Narrative({ live, running }: { live: TrackState; running: boolean }) {
   );
 }
 
-function Winner({ molecule }: { molecule: LiveMolecule }) {
+function Winner({ molecule, capped }: { molecule: LiveMolecule; capped: string | null }) {
   const props = molecule.check?.properties;
   return (
     <section aria-labelledby="kept-h" className="rounded-[32px] bg-surface p-5 shadow-float sm:p-6">
@@ -213,6 +246,11 @@ function Winner({ molecule }: { molecule: LiveMolecule }) {
         </h3>
         <Verdict status={molecule.status} big />
       </div>
+      {capped && molecule.status === "warn" && (
+        <p className="mt-2.5 max-w-[70ch] rounded-[22px] bg-soft-2 px-4 py-3 text-[14px] leading-relaxed text-muted">
+          Its verdict stops at questions rather than accepted, and that is not a mark against it. {capped}
+        </p>
+      )}
       {molecule.rationale && (
         <p className="mt-2.5 max-w-[70ch] text-[15.5px] leading-relaxed">{molecule.rationale}</p>
       )}

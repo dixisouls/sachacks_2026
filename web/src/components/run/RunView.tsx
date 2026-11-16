@@ -80,7 +80,13 @@ export default function RunView({ run }: { run: Run }) {
                   {/* the label is the backend's, never the interface's */}
                   {stored?.label ?? p}
                 </span>
-                <TrackPip status={t.status} tried={t.tried} accepted={t.accepted} round={t.round} />
+                <TrackPip
+                  status={t.status}
+                  tried={t.tried}
+                  accepted={t.accepted}
+                  round={t.round}
+                  capped={!(t.pocket ?? stored?.pocket) && (t.proteins.length > 0 || !!t.pocketNote)}
+                />
               </button>
             );
           })}
@@ -149,11 +155,14 @@ function TrackPip({
   tried,
   accepted,
   round,
+  capped,
 }: {
   status: "waiting" | "running" | "done" | "error";
   tried: number;
   accepted: number;
   round: { n: number; of: number } | null;
+  /** No structure to test a fit against, so `accepted` can only ever be 0. */
+  capped: boolean;
 }) {
   const word =
     status === "waiting"
@@ -164,7 +173,9 @@ function TrackPip({
           : `${tried} proposed`
         : status === "error"
           ? "stopped early"
-          : `${accepted} of ${tried} kept`;
+          : capped
+            ? `${tried} proposed, no structure to test`
+            : `${accepted} of ${tried} kept`;
 
   return (
     <span className="flex items-center gap-1.5 text-[12.5px] text-muted">
