@@ -310,11 +310,18 @@ def test_a_section_that_fails_is_null_and_does_not_stop_the_rest(monkeypatch):
 
 
 def test_no_homolog_in_the_data_is_an_empty_list_not_a_missing_section(monkeypatch):
-    """GABBR2, the target of the Rett demo's seed, has no recorded homolog.
+    """SIGMAR1 has no recorded homolog, and no rebuild will give it one.
 
     An empty list says where the data stops, which is worth showing. A null
     section would read as a bug, and asking the model to fill the gap is exactly
     how an off-target list gets invented.
+
+    This used to use GABBR2, which was empty only because the identity cutoff
+    was 40% and GABBR1 -- the other half of the same receptor -- is 36%
+    identical to it. Lowering the cutoff to 30% fixed that, and would have
+    broken this test, which is the right outcome for a test pinned to a gap that
+    was a bug. SIGMAR1 is a real gap: it has no human paralog at any cutoff
+    worth using, measured down to 25%.
     """
     asked = []
 
@@ -324,14 +331,14 @@ def test_no_homolog_in_the_data_is_an_empty_list_not_a_missing_section(monkeypat
 
     monkeypatch.setattr(workup_mod, "_ask", fake_ask)
     context = {**CONTEXT,
-               "targets": [{"symbol": "GABBR2", "uniprot": "O75899",
-                            "gene_id": "ENSG00000136928"}]}
-    assert homologs(["ENSG00000136928"]) == []
+               "targets": [{"symbol": "SIGMAR1", "uniprot": "Q99720",
+                            "gene_id": "ENSG00000147955"}]}
+    assert homologs(["ENSG00000147955"]) == []
 
     out = asyncio.run(workup_mod.run_workup(_job(), "approved", _track(), context))
     assert out["offtarget"] == {"items": [], "note": out["offtarget"]["note"]}
     assert out["offtarget"]["items"] == []
-    assert "GABBR2" in out["offtarget"]["note"]
+    assert "SIGMAR1" in out["offtarget"]["note"]
     assert "not evidence that the molecule is selective" in out["offtarget"]["note"]
     # The note must quote the cutoffs the artifact was actually built with, not a
     # number written here: they have moved once already, and a sentence claiming
@@ -355,7 +362,24 @@ def test_the_homolog_lookup_searches_both_columns():
     gene = only_reverse[0]
     found = homologs([gene])
     assert found, f"{gene} appears in the data but the lookup found nothing"
-    assert all(0.4 <= h["identity"] <= 1.0 for h in found)
+    # The floor is the cutoff the artifact records, not one written here.
+    import json
+    from pathlib import Path
+
+    floor = json.loads(Path("artifacts/meta.json").read_text())["homology"]["min_identity"]
+    assert all(floor <= h["identity"] <= 1.0 for h in found)
+
+
+def test_the_gabbr2_gap_is_closed():
+    """The seed of the Rett demo had no off-target data at all at 40% identity.
+
+    GABBR1 and GABBR2 are the two subunits of the same GABA-B receptor and 36%
+    identical, so a cutoff that hid GABBR1 from a reader asking what else a
+    GABBR2-aimed molecule might hit was hiding the one answer worth having.
+    """
+    found = homologs(["ENSG00000136928"])  # GABBR2
+    assert [h["symbol"] for h in found] == ["GABBR1"]
+    assert 0.3 <= found[0]["identity"] < 0.4, "the pair that motivated the rebuild"
 
 
 def test_the_limits_sentence_names_every_cutoff_the_artifact_records():

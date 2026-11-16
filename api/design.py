@@ -341,7 +341,17 @@ def build_context(drug_id: str, disease_id: str, pool: str = "all",
                     if own_targets else "none recorded on these paths"))
     lines.append("")
     lines.append("WHY THE GRAPH RANKED IT:")
-    lines += [f"  - {p['explanation']}." for p in paths["paths"][:6]] or ["  - no paths recorded"]
+    # A protein_homolog path carries weight 0 in the score (see DEFAULT_WEIGHTS in
+    # api/scoring.py, which explains why it is still computed). It is supporting
+    # context, so it is marked as that rather than offered to the model as a
+    # reason for the rank -- the model quotes these lines back in its rationales,
+    # and at the sequence cutoff the artifact is built with, the weakest of them
+    # are a reason to look rather than a reason to believe.
+    shown = paths["paths"][:6]
+    lines += [f"  - {p['explanation']}."
+              + (" (sequence similarity only: supporting context, not part of the score)"
+                 if p["type"] == "protein_homolog" else "")
+              for p in shown] or ["  - no paths recorded"]
 
     approved = [c for c in result["approved"][:10] if c["drug_id"] != drug_id]
     investigational = [c for c in result["investigational"][:10] if c["drug_id"] != drug_id]
