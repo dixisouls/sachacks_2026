@@ -3,10 +3,9 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { getBrief, getPaths } from "@/lib/api";
+import { getPaths } from "@/lib/api";
 import { drugLabel, PATH_HINT, PATH_LABEL, softenNames, titleCase } from "@/lib/format";
 import type { Candidate, DiseaseSummary, Path, PathNode, PathsResponse, PathType } from "@/lib/types";
-import BriefView from "./BriefView";
 import Chain, { type ChainLink, type ChainNode } from "./Chain";
 import DesignPanel from "./DesignPanel";
 import ErrorCard from "./ErrorCard";
@@ -16,7 +15,7 @@ import ReadinessBadge from "./ReadinessBadge";
 import ScoreMeter from "./ScoreMeter";
 import StructurePanel from "./StructurePanel";
 
-type Tab = "why" | "evidence" | "structure" | "design";
+type Tab = "why" | "structure" | "design";
 
 /** One path from the API as chain nodes and labelled links. */
 function toChain(p: Path, data: PathsResponse): { nodes: ChainNode[]; links: ChainLink[] } {
@@ -62,8 +61,6 @@ export default function DetailPanel({
   const [extras, setExtras] = useState(false);
 
   const paths = useQuery({ queryKey: ["paths", diseaseId, drugId], queryFn: () => getPaths(drugId, diseaseId) });
-  // brief is the slowest call, so it starts as soon as the panel opens (architecture.md §10.3)
-  const brief = useQuery({ queryKey: ["brief", diseaseId, drugId], queryFn: () => getBrief(drugId, diseaseId) });
 
   useEffect(() => {
     setHighlight(null);
@@ -107,7 +104,6 @@ export default function DetailPanel({
   const nReasons = paths.data?.paths.length;
   const tabs: { key: Tab; label: string; note?: string; tag?: string; busy?: boolean }[] = [
     { key: "why", label: "Why it's here", note: nReasons != null ? String(nReasons) : undefined },
-    { key: "evidence", label: "Evidence", busy: brief.isLoading },
     { key: "structure", label: "3D structure" },
     { key: "design", label: "Design new", tag: "AI" },
   ];
@@ -182,7 +178,7 @@ export default function DetailPanel({
 
       {/* tabs: three equal parts */}
       <div className="px-5 pt-5 sm:px-8">
-        <div role="tablist" aria-label="Details" className="grid grid-cols-2 gap-1 rounded-full bg-soft p-1 text-[13.5px] font-semibold sm:grid-cols-4 sm:text-[14px]">
+        <div role="tablist" aria-label="Details" className="grid grid-cols-3 gap-1 rounded-full bg-soft p-1 text-[13.5px] font-semibold sm:text-[14px]">
           {tabs.map((t) => (
             <button
               key={t.key}
@@ -290,19 +286,6 @@ export default function DetailPanel({
 
         {tab === "design" && (
           <DesignPanel drugId={drugId} diseaseId={diseaseId} drugName={name} diseaseName={disease.name} />
-        )}
-
-        {tab === "evidence" && (
-          <BriefView
-            brief={brief.data}
-            loading={brief.isLoading}
-            error={brief.isError}
-            onRetry={() => brief.refetch()}
-            onGraph={(id) => {
-              setHighlight(id);
-              setTab("why");
-            }}
-          />
         )}
       </div>
     </article>
